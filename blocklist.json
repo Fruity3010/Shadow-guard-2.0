@@ -1,0 +1,71 @@
+[
+  {
+    "domain": "instagram.com",
+    "category": "social_media",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "risk_score": 60,
+    "reason": "Social media - productivity risk",
+    "added_at": "2025-09-11T18:00:00"
+  },
+  {
+    "domain": "reddit.com",
+    "category": "social_media",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "risk_score": 60,
+    "reason": "Social media - productivity risk",
+    "added_at": "2025-09-11T18:00:00"
+  },
+  {
+    "domain": "tiktok.com",
+    "category": "social_media",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "risk_score": 70,
+    "reason": "Social media - security and productivity risk",
+    "added_at": "2025-09-11T18:00:00"
+  },
+  {
+    "domain": "ilovepdf.com",
+    "category": "social_media",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "risk_score": 50,
+    "reason": "",
+    "use_ai": false,
+    "added_at": "2025-09-12T08:05:40.719569"
+  },
+  {
+    "domain": "facebook.com",
+    "category": "social_media",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "risk_score": 50,
+    "reason": "",
+    "use_ai": false,
+    "added_at": "2026-01-17T16:13:49.601039"
+  },
+  {
+    "domain": "netflix.com",
+    "category": "social_media",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "risk_score": 50,
+    "reason": "",
+    "use_ai": false,
+    "added_at": "2026-02-11T14:22:53.464136"
+  }
+]

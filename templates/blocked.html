@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Access Denied - Security Policy</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        color: white;
+        padding: 20px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      /* Animated background particles */
+      body::before {
+        content: "";
+        position: absolute;
+        width: 200%;
+        height: 200%;
+        background: url('data:image/svg+xml,<svg width="60" height="60" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><g fill="%239C92AC" fill-opacity="0.1"><path d="M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z"/></g></g></svg>');
+        animation: slide 20s linear infinite;
+      }
+
+      @keyframes slide {
+        0% {
+          transform: translate(0, 0);
+        }
+        100% {
+          transform: translate(-50%, -50%);
+        }
+      }
+
+      .container {
+        text-align: center;
+        background: rgba(255, 255, 255, 0.05);
+        padding: 40px;
+        border-radius: 24px;
+        backdrop-filter: blur(20px);
+        box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5),
+          inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        max-width: 650px;
+        width: 100%;
+        animation: slideUp 0.6s ease-out;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        position: relative;
+        z-index: 1;
+      }
+
+      @keyframes slideUp {
+        from {
+          opacity: 0;
+          transform: translateY(40px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .header {
+        margin-bottom: 30px;
+      }
+
+      .icon {
+        font-size: 80px;
+        margin-bottom: 20px;
+        display: inline-block;
+        animation: pulse 2s infinite;
+        filter: drop-shadow(0 10px 20px rgba(231, 76, 60, 0.3));
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.05);
+        }
+      }
+
+      h1 {
+        font-size: 36px;
+        margin-bottom: 10px;
+        font-weight: 700;
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .subtitle {
+        font-size: 16px;
+        opacity: 0.7;
+        margin-bottom: 20px;
+      }
+
+      .domain-section {
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 20px;
+        margin: 20px 0;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .domain {
+        font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+        font-size: 20px;
+        font-weight: 600;
+        margin-bottom: 10px;
+        color: #fff;
+      }
+
+      .risk-level {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 600;
+        margin-top: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .risk-high {
+        background: rgba(231, 76, 60, 0.2);
+        border: 1px solid rgba(231, 76, 60, 0.5);
+        color: #ff6b6b;
+      }
+
+      .risk-medium {
+        background: rgba(241, 196, 15, 0.2);
+        border: 1px solid rgba(241, 196, 15, 0.5);
+        color: #ffd93d;
+      }
+
+      .risk-low {
+        background: rgba(46, 213, 115, 0.2);
+        border: 1px solid rgba(46, 213, 115, 0.5);
+        color: #6bcf7f;
+      }
+
+      .risk-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: currentColor;
+        animation: blink 2s infinite;
+      }
+
+      @keyframes blink {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.3;
+        }
+      }
+      .info-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin: 25px 0;
+      }
+
+      .info-card {
+        background: rgba(255, 255, 255, 0.05);
+        padding: 15px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .info-label {
+        font-size: 12px;
+        opacity: 0.6;
+        margin-bottom: 5px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .info-value {
+        font-size: 16px;
+        font-weight: 600;
+      }
+
+      .alternatives {
+        background: linear-gradient(
+          135deg,
+          rgba(46, 213, 115, 0.1),
+          rgba(0, 123, 255, 0.1)
+        );
+        border-radius: 16px;
+        padding: 20px;
+        margin: 25px 0;
+        border: 1px solid rgba(46, 213, 115, 0.2);
+      }
+
+      .alternatives h3 {
+        font-size: 18px;
+        margin-bottom: 15px;
+        color: #6bcf7f;
+      }
+
+      .alt-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+      }
+
+      .alt-item {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        transition: all 0.3s ease;
+        cursor: pointer;
+      }
+
+      .alt-item:hover {
+        background: rgba(255, 255, 255, 0.15);
+        transform: translateY(-2px);
+      }
+
+      .actions {
+        display: flex;
+        gap: 15px;
+        justify-content: center;
+        margin-top: 30px;
+      }
+
+      .btn {
+        padding: 12px 28px;
+        border-radius: 12px;
+        font-size: 15px;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 15px 35px rgba(102, 126, 234, 0.4);
+      }
+
+      .btn-secondary {
+        background: rgba(255, 255, 255, 0.1);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .btn-secondary:hover {
+        background: rgba(255, 255, 255, 0.15);
+        transform: translateY(-2px);
+      }
+
+      .footer {
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        font-size: 13px;
+        opacity: 0.6;
+      }
+
+      .policy-link {
+        color: #667eea;
+        text-decoration: none;
+        transition: opacity 0.3s;
+      }
+
+      .policy-link:hover {
+        opacity: 0.8;
+      }
+
+      /* Modal for request access */
+      .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 1000;
+        animation: fadeIn 0.3s;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      .modal-content {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: linear-gradient(135deg, #1e1e2e, #2a2a3e);
+        padding: 30px;
+        border-radius: 20px;
+        max-width: 400px;
+        width: 90%;
+        box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .modal h2 {
+        margin-bottom: 20px;
+        color: #fff;
+      }
+
+      .form-group {
+        margin-bottom: 20px;
+      }
+
+      .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 14px;
+        opacity: 0.8;
+      }
+
+      .form-group input,
+      .form-group textarea {
+        width: 100%;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.05);
+        color: white;
+        font-size: 14px;
+      }
+
+      .form-group textarea {
+        resize: vertical;
+        min-height: 80px;
+      }
+
+      .close-modal {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background: none;
+        border: none;
+        color: white;
+        font-size: 24px;
+        cursor: pointer;
+        opacity: 0.6;
+        transition: opacity 0.3s;
+      }
+
+      .close-modal:hover {
+        opacity: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <div class="icon">⛔</div>
+        <h1>Access Denied</h1>
+        <div class="subtitle">Website blocked by security policy</div>
+      </div>
+
+      <div class="domain-section">
+        <div class="domain">{{DOMAIN}}</div>
+        <div class="risk-level risk-high">
+          <span class="risk-indicator"></span>
+          <span>High Risk - Productivity Impact</span>
+        </div>
+      </div>
+
+      <div class="info-grid">
+        <div class="info-card">
+          <div class="info-label">Category</div>
+          <div class="info-value">Social Media</div>
+        </div>
+        <div class="info-card">
+          <div class="info-label">Block Time</div>
+          <div class="info-value" id="block-time">--:--:--</div>
+        </div>
+      </div>
+
+      <div class="alternatives">
+        <h3>✨ Recommended Alternatives</h3>
+        <div class="alt-list">
+          <div class="alt-item">📧 Slack - Team Communication</div>
+          <div class="alt-item">📝 Notion - Productivity</div>
+          <div class="alt-item">🎯 Trello - Task Management</div>
+          <div class="alt-item">💼 LinkedIn - Professional Network</div>
+          <div class="alt-item">📚 Medium - Knowledge Articles</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary" onclick="requestAccess()">
+          <span>🔓</span>
+          <span>Request Access</span>
+        </button>
+        <button class="btn btn-secondary" onclick="goBack()">
+          <span>←</span>
+          <span>Go Back</span>
+        </button>
+      </div>
+
+      <div class="footer">
+        <p>
+          This website has been blocked to maintain productivity and security.
+        </p>
+        <p>
+          For more information, see our
+          <a href="#" class="policy-link">Internet Usage Policy</a>
+        </p>
+      </div>
+    </div>
+
+<div id="requestModal" class="modal">
+  <div class="modal-content">
+    <button class="close-modal" onclick="closeModal()">&times;</button>
+    <h2 id="modalTitle">Request Website Access</h2>
+
+    <!-- AI Simulation block (hidden by default) -->
+    <div id="ai-steps" style="margin-top:20px; text-align:left; font-size:14px; line-height:1.6; display:none;">
+      <p>Step 1: Requesting...</p>
+      <p>Step 2: Checking for vulnerabilities...</p>
+      <p>Step 3: Running AI risk engine...</p>
+    </div>
+  </div>
+</div>
+
+
+    <script>
+function requestAccess(domain) {
+  const modal = document.getElementById("requestModal");
+  modal.style.display = "block";
+
+  // Update modal title
+  document.getElementById("modalTitle").innerText = "Requesting Access...";
+
+  // Show AI steps
+  const stepsElement = document.getElementById("ai-steps");
+  stepsElement.style.display = "block";
+
+  // Reset steps opacity
+  const steps = stepsElement.querySelectorAll("p");
+  steps.forEach((p) => (p.style.opacity = 0.2));
+
+  let currentStep = 0;
+
+  const interval = setInterval(() => {
+    if (currentStep < steps.length) {
+      // Reveal steps one by one
+      steps[currentStep].style.opacity = 1;
+      currentStep++;
+    } else {
+      clearInterval(interval);
+
+      // Show medium-risk message AFTER all steps
+      stepsElement.insertAdjacentHTML(
+        "beforeend",
+        `<p style="color:#e6b800; margin-top: 15px; font-weight:600;">
+           ⚠️ Medium risk detected. Please use alternative apps.  
+           ${domain} has been forwarded to IT department for manual review.
+         </p>`
+      );
+
+      // Add 3-second countdown before closing modal
+      let countdown = 3;
+      const countdownEl = document.createElement("p");
+      countdownEl.style.color = "#999";
+      countdownEl.style.marginTop = "10px";
+      countdownEl.style.fontWeight = "600";
+      stepsElement.appendChild(countdownEl);
+
+      const countdownInterval = setInterval(() => {
+        countdownEl.innerText = `Closing in ${countdown}...`;
+        countdown--;
+        if (countdown < 0) {
+          clearInterval(countdownInterval);
+          modal.style.display = "none"; // Close modal
+        }
+      }, 1000);
+    }
+  }, 2000);
+}
+
+
+
+      function closeModal() {
+        const modal = document.getElementById("requestModal");
+        modal.style.display = "none";
+
+        
+      }
+
+      function submitRequest(event) {
+        event.preventDefault();
+        alert(
+          "Access request submitted! You will receive an email response within 24 hours."
+        );
+        closeModal();
+      }
+    </script>
+    sq
+  </body>
+</html>

@@ -1,0 +1,44 @@
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+/tmp/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Certificates
+*.pem
+*.crt
+*.key
+.mitmproxy/
+
+# Temporary files
+/tmp/
+*.tmp
+*.bak
