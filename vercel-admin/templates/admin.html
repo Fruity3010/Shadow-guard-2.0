@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShadowGuard Cloud Admin</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Segoe UI", system-ui, sans-serif;
+            background: linear-gradient(135deg, #eef3ff, #f8fbff);
+            color: #1f2937;
+        }
+        .wrap {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+        .card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        h1, h2, h3 { margin-top: 0; }
+        .muted { color: #64748b; }
+        .grid {
+            display: grid;
+            grid-template-columns: 1.1fr 1fr;
+            gap: 20px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 14px;
+        }
+        .stat {
+            padding: 16px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #2563eb, #4f46e5);
+            color: white;
+        }
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+        }
+        .row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        input, select, button {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1px solid #dbe3f0;
+            font: inherit;
+        }
+        button {
+            cursor: pointer;
+            border: none;
+            font-weight: 600;
+        }
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+        }
+        .btn-danger {
+            background: #dc2626;
+            color: white;
+        }
+        .btn-secondary {
+            background: #0f172a;
+            color: white;
+        }
+        .rule-list {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            max-height: 460px;
+            overflow: auto;
+        }
+        .rule-item {
+            padding: 14px 16px;
+            border-bottom: 1px solid #edf2f7;
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: center;
+        }
+        .rule-item:last-child { border-bottom: none; }
+        .pill {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .alert {
+            display: none;
+            padding: 12px 14px;
+            border-radius: 10px;
+            margin-bottom: 14px;
+        }
+        .alert-success {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        .alert-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        .machines {
+            max-width: 360px;
+        }
+        .methods {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .methods label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            padding: 8px 10px;
+            border-radius: 10px;
+        }
+        .quick-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        .request-list {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            max-height: 360px;
+            overflow: auto;
+        }
+        .request-item {
+            padding: 16px;
+            border-bottom: 1px solid #edf2f7;
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            align-items: flex-start;
+        }
+        .request-item:last-child { border-bottom: none; }
+        .request-actions {
+            display: flex;
+            gap: 8px;
+            min-width: 190px;
+        }
+        .request-actions button {
+            padding: 10px 12px;
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 28px;
+            height: 28px;
+            padding: 0 10px;
+            border-radius: 999px;
+            background: #fee2e2;
+            color: #b91c1c;
+            font-weight: 700;
+            font-size: 13px;
+        }
+        .stack {
+            display: grid;
+            gap: 20px;
+        }
+        .banner {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 16px 18px;
+            border-radius: 14px;
+            margin-bottom: 18px;
+            background: linear-gradient(135deg, #f97316, #f59e0b);
+            color: white;
+            box-shadow: 0 14px 28px rgba(249, 115, 22, 0.25);
+        }
+        .banner.active {
+            display: flex;
+        }
+        .banner-copy {
+            display: grid;
+            gap: 4px;
+        }
+        .banner-title {
+            font-weight: 700;
+            font-size: 16px;
+        }
+        .banner-text {
+            font-size: 14px;
+            opacity: 0.95;
+        }
+        .sound-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            background: #f8fafc;
+            color: #0f172a;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .sound-toggle input {
+            width: auto;
+            margin: 0;
+        }
+        .admin-sections {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .section-box {
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 18px;
+            background: #f8fbff;
+        }
+        .section-box h3 {
+            margin-bottom: 12px;
+        }
+        .section-list {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            background: white;
+            max-height: 260px;
+            overflow: auto;
+        }
+        .section-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 14px;
+            border-bottom: 1px solid #edf2f7;
+        }
+        .section-item:last-child {
+            border-bottom: none;
+        }
+        .section-form {
+            display: grid;
+            gap: 10px;
+        }
+        .policy-list {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            background: white;
+            max-height: 360px;
+            overflow: auto;
+        }
+        .policy-item {
+            padding: 14px;
+            border-bottom: 1px solid #edf2f7;
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            align-items: flex-start;
+        }
+        .policy-item:last-child {
+            border-bottom: none;
+        }
+        .policy-meta {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        .pill-neutral {
+            background: #f1f5f9;
+            color: #334155;
+        }
+        .pill-allow {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .pill-block {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        .pill-isolate {
+            background: #ede9fe;
+            color: #5b21b6;
+        }
+        .lookup-result {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 14px;
+            background: white;
+            min-height: 92px;
+        }
+        @media (max-width: 900px) {
+            .grid, .stats { grid-template-columns: 1fr; }
+            .admin-sections { grid-template-columns: 1fr; }
+            .request-item { flex-direction: column; }
+            .request-actions { min-width: 0; width: 100%; }
+            .banner {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="card">
+            <h1>ShadowGuard Cloud Admin</h1>
+            <p class="muted">Control local machine agents through your stable Cloudflare hostnames.</p>
+            <div class="row machines">
+                <label for="machineInput">Target machine</label>
+                {% if allowed_machines %}
+                <select id="machineInput"></select>
+                {% else %}
+                <input type="text" id="machineInput" placeholder="for example: peterpc">
+                {% endif %}
+            </div>
+            <div class="row" style="justify-content: space-between; margin-top: 12px;">
+                <p id="targetPreview" class="muted" style="margin: 0;"></p>
+                <label class="sound-toggle">
+                    <input type="checkbox" id="soundToggle" checked>
+                    <span>Sound alerts</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="stats card">
+            <div class="stat">
+                <div class="stat-value" id="totalBlocked">0</div>
+                <div>Blocked Sites</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="activeRules">0</div>
+                <div>Active Rules</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="aiModeStat">OFF</div>
+                <div>AI Mode</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="requestsToday">0</div>
+                <div>Requests Today</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="pendingRequests">0</div>
+                <div>Pending Unblocks</div>
+            </div>
+        </div>
+
+        <div class="alert alert-success" id="successAlert"></div>
+        <div class="alert alert-error" id="errorAlert"></div>
+        <div class="banner" id="requestBanner">
+            <div class="banner-copy">
+                <div class="banner-title">New unblock request</div>
+                <div class="banner-text" id="requestBannerText">A machine agent is asking for a site to be unblocked.</div>
+            </div>
+            <button class="btn-secondary" style="max-width: 180px;" onclick="dismissRequestBanner()">Dismiss</button>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h2>Add Blocking Rule</h2>
+                <div class="row">
+                    <div style="flex:1 1 100%;">
+                        <label for="domainInput">Domain</label>
+                        <input type="text" id="domainInput" placeholder="example.com">
+                    </div>
+                    <div style="flex:1 1 100%;">
+                        <label for="categorySelect">Category</label>
+                        <select id="categorySelect">
+                            <option value="social_media">Social Media</option>
+                            <option value="file_sharing">File Sharing</option>
+                            <option value="cloud_storage">Cloud Storage</option>
+                            <option value="ai_tools">AI Tools</option>
+                            <option value="collaboration">Collaboration</option>
+                            <option value="streaming">Streaming</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                    </div>
+                    <div style="flex:1 1 100%;">
+                        <label for="reasonInput">Reason</label>
+                        <input type="text" id="reasonInput" placeholder="Optional reason">
+                    </div>
+                    <div style="flex:1 1 100%;">
+                        <label for="riskSlider">Risk Score</label>
+                        <input type="range" id="riskSlider" min="1" max="100" value="50">
+                        <div class="muted">Score: <span id="riskValue">50</span></div>
+                    </div>
+                    <div style="flex:1 1 100%;">
+                        <label>Methods</label>
+                        <div class="methods">
+                            <label><input type="checkbox" name="method" value="GET" checked>GET</label>
+                            <label><input type="checkbox" name="method" value="POST" checked>POST</label>
+                            <label><input type="checkbox" name="method" value="PUT">PUT</label>
+                            <label><input type="checkbox" name="method" value="DELETE">DELETE</label>
+                        </div>
+                    </div>
+                    <div style="flex:1 1 100%;">
+                        <label><input type="checkbox" id="aiModeToggle"> Enable AI flag</label>
+                    </div>
+                </div>
+                <div class="row" style="margin-top: 16px;">
+                    <button class="btn-primary" onclick="addBlockRule()">Add Rule</button>
+                </div>
+
+                <h3 style="margin-top: 24px;">Quick Templates</h3>
+                <div class="quick-grid">
+                    <button class="btn-danger" onclick="blockAllSocialMedia()">Block Social Media</button>
+                    <button class="btn-danger" onclick="blockAllFileSharing()">Block File Sharing</button>
+                    <button class="btn-danger" onclick="blockAllAI()">Block AI Tools</button>
+                    <button class="btn-danger" onclick="blockAllStreaming()">Block Streaming</button>
+                </div>
+            </div>
+
+            <div class="stack">
+                <div class="card">
+                    <div class="row" style="justify-content: space-between;">
+                        <h2>Emergency Unblock Requests</h2>
+                        <span class="badge" id="requestBadge">0</span>
+                    </div>
+                    <div class="request-list" id="requestList">
+                        <div class="rule-item"><div class="muted">No emergency requests waiting</div></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="row" style="justify-content: space-between;">
+                        <h2>Current Rules</h2>
+                        <button class="btn-secondary" style="max-width: 180px;" onclick="clearAllRules()">Clear All</button>
+                    </div>
+                    <div class="rule-list" id="blockedList"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Access Control Policies</h2>
+            <p class="muted">Manage reusable groups, assign machines to those groups, and create `allow`, `block`, or `isolate` rules for specific apps.</p>
+
+            <div class="admin-sections">
+                <div class="section-box">
+                    <h3>Groups</h3>
+                    <div class="section-form" style="margin-bottom: 12px;">
+                        <input type="text" id="groupNameInput" placeholder="New group name">
+                        <input type="text" id="groupDescriptionInput" placeholder="Short description">
+                        <button class="btn-primary" onclick="createGroup()">Create Group</button>
+                    </div>
+                    <div class="section-list" id="groupList">
+                        <div class="section-item"><div class="muted">No groups loaded yet</div></div>
+                    </div>
+                </div>
+
+                <div class="section-box">
+                    <h3>Machine Assignment</h3>
+                    <div class="section-form">
+                        <input type="text" id="assignmentMachineDisplay" readonly>
+                        <select id="assignmentGroupSelect"></select>
+                        <input type="text" id="assignmentDepartmentInput" placeholder="Department">
+                        <input type="text" id="assignmentUserInput" placeholder="Primary user">
+                        <input type="text" id="assignmentDeviceInput" placeholder="Device label">
+                        <button class="btn-primary" onclick="saveMachineAssignment()">Save Assignment</button>
+                    </div>
+                </div>
+
+                <div class="section-box">
+                    <h3>Policy Lookup</h3>
+                    <div class="section-form" style="margin-bottom: 12px;">
+                        <input type="text" id="lookupDomainInput" placeholder="App domain to evaluate, for example workday.com">
+                        <button class="btn-secondary" onclick="lookupPolicy()">Check Access Decision</button>
+                    </div>
+                    <div class="lookup-result" id="lookupResult">
+                        <div class="muted">Run a lookup to see the effective decision for the selected machine.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="admin-sections">
+                <div class="section-box" style="grid-column: span 3;">
+                    <h3>Create Policy Rule</h3>
+                    <div class="admin-sections" style="margin-top: 0;">
+                        <div class="section-form">
+                            <select id="policyScopeType" onchange="updatePolicyScopeUi()">
+                                <option value="machine">Selected machine</option>
+                                <option value="group">Group</option>
+                                <option value="global">All machines</option>
+                            </select>
+                            <select id="policyGroupTargetSelect" style="display: none;"></select>
+                            <input type="text" id="policyDomainInput" placeholder="App domain, for example workday.com">
+                        </div>
+                        <div class="section-form">
+                            <select id="policyActionSelect">
+                                <option value="allow">Allow</option>
+                                <option value="block">Block</option>
+                                <option value="isolate">Isolate</option>
+                            </select>
+                            <input type="text" id="policyDescriptionInput" placeholder="Reason or notes">
+                            <button class="btn-primary" onclick="createPolicy()">Save Policy</button>
+                        </div>
+                        <div class="lookup-result">
+                            <strong>Precedence</strong>
+                            <div class="muted" style="margin-top: 8px;">Machine rules override group rules. Group rules override global rules. The most specific app domain wins inside the same scope.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="policy-list" id="policyList">
+                <div class="policy-item"><div class="muted">No policies created yet</div></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let blockedSites = [];
+        let unblockRequests = [];
+        let groups = [];
+        let policies = [];
+        let knownPendingRequestIds = new Set();
+        let requestFeedInitialized = false;
+        let soundAlertsEnabled = true;
+        let audioContext = null;
+        const allowedMachines = {{ allowed_machines|tojson }};
+        const defaultMachine = {{ default_machine|tojson }};
+        const agentUrlTemplate = {{ agent_url_template|tojson }};
+        const fixedAgentBaseUrl = {{ agent_base_url|tojson }};
+        const defaultGroups = {{ default_groups|tojson }};
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeMachineSelector();
+            updateTargetPreview();
+            initializeSoundToggle();
+            initializePolicyUi();
+            document.getElementById('riskSlider').addEventListener('input', (e) => {
+                document.getElementById('riskValue').textContent = e.target.value;
+            });
+            document.getElementById('machineInput').addEventListener('change', async (e) => {
+                localStorage.setItem('shadowguardMachine', e.target.value.trim());
+                resetRequestNotifications();
+                updateTargetPreview();
+                await loadBlockedSites();
+                await loadUnblockRequests();
+                await updateStats();
+                await loadMachineAssignment();
+            });
+            loadBlockedSites();
+            loadUnblockRequests();
+            updateStats();
+            loadGroups().then(() => {
+                loadMachineAssignment();
+                loadPolicies();
+            });
+            setInterval(async () => {
+                await Promise.all([loadBlockedSites(), loadUnblockRequests(), updateStats()]);
+            }, 5000);
+        });
+
+        function initializeSoundToggle() {
+            const toggle = document.getElementById('soundToggle');
+            const stored = localStorage.getItem('shadowguardSoundAlerts');
+            soundAlertsEnabled = stored !== 'false';
+            toggle.checked = soundAlertsEnabled;
+            toggle.addEventListener('change', () => {
+                soundAlertsEnabled = toggle.checked;
+                localStorage.setItem('shadowguardSoundAlerts', soundAlertsEnabled ? 'true' : 'false');
+                if (soundAlertsEnabled) {
+                    primeAudio();
+                }
+            });
+        }
+
+        function initializeMachineSelector() {
+            const input = document.getElementById('machineInput');
+            const storedMachine = localStorage.getItem('shadowguardMachine') || defaultMachine || '';
+            if (input.tagName === 'SELECT') {
+                input.innerHTML = allowedMachines.map((machine) => `<option value="${machine}">${machine}</option>`).join('');
+                if (storedMachine && allowedMachines.includes(storedMachine)) {
+                    input.value = storedMachine;
+                }
+            } else {
+                input.value = storedMachine;
+            }
+        }
+
+        function initializePolicyUi() {
+            updatePolicyScopeUi();
+            renderGroupList(defaultGroups || []);
+            populateGroupSelects(defaultGroups || []);
+        }
+
+        function getSelectedMachine() {
+            return document.getElementById('machineInput').value.trim();
+        }
+
+        function buildApiUrl(path) {
+            const machine = getSelectedMachine();
+            if (!machine) return path;
+            const separator = path.includes('?') ? '&' : '?';
+            return `${path}${separator}machine=${encodeURIComponent(machine)}`;
+        }
+
+        function buildJsonRequest(body) {
+            const machine = getSelectedMachine();
+            return JSON.stringify({ ...body, ...(machine ? { machine } : {}) });
+        }
+
+        function updateTargetPreview() {
+            const machine = getSelectedMachine();
+            const preview = document.getElementById('targetPreview');
+            document.getElementById('assignmentMachineDisplay').value = machine || 'No machine selected';
+            if (agentUrlTemplate && machine) {
+                preview.textContent = `Target agent: ${agentUrlTemplate.replace('{machine}', machine)}`;
+                return;
+            }
+            if (fixedAgentBaseUrl) {
+                preview.textContent = `Target agent: ${fixedAgentBaseUrl}`;
+                return;
+            }
+            preview.textContent = 'Target agent is not configured yet.';
+        }
+
+        function updatePolicyScopeUi() {
+            const scopeType = document.getElementById('policyScopeType').value;
+            const groupSelect = document.getElementById('policyGroupTargetSelect');
+            groupSelect.style.display = scopeType === 'group' ? 'block' : 'none';
+        }
+
+        function showAlert(type, message) {
+            const success = document.getElementById('successAlert');
+            const error = document.getElementById('errorAlert');
+            success.style.display = 'none';
+            error.style.display = 'none';
+            const el = type === 'success' ? success : error;
+            el.textContent = message;
+            el.style.display = 'block';
+        }
+
+        function showRequestBanner(message) {
+            document.getElementById('requestBannerText').textContent = message;
+            document.getElementById('requestBanner').classList.add('active');
+        }
+
+        function dismissRequestBanner() {
+            document.getElementById('requestBanner').classList.remove('active');
+        }
+
+        function resetRequestNotifications() {
+            knownPendingRequestIds = new Set();
+            requestFeedInitialized = false;
+            dismissRequestBanner();
+        }
+
+        async function loadBlockedSites() {
+            try {
+                const response = await fetch(buildApiUrl('/api/blocked-sites'));
+                blockedSites = await response.json();
+                renderBlockedList(blockedSites);
+            } catch (error) {
+                showAlert('error', 'Failed to load blocked sites');
+            }
+        }
+
+        async function loadUnblockRequests() {
+            try {
+                const response = await fetch(buildApiUrl('/api/unblock-requests'));
+                const payload = await response.json();
+                unblockRequests = payload.requests || [];
+                notifyOnNewRequests(unblockRequests);
+                renderRequestList(unblockRequests);
+            } catch (error) {
+                showAlert('error', 'Failed to load unblock requests');
+            }
+        }
+
+        async function loadGroups() {
+            try {
+                const response = await fetch('/api/groups');
+                const payload = await response.json();
+                groups = payload.groups || [];
+                renderGroupList(groups);
+                populateGroupSelects(groups);
+            } catch (error) {
+                showAlert('error', 'Failed to load groups');
+            }
+        }
+
+        function renderGroupList(items) {
+            const list = document.getElementById('groupList');
+            if (!Array.isArray(items) || items.length === 0) {
+                list.innerHTML = '<div class="section-item"><div class="muted">No groups created yet</div></div>';
+                return;
+            }
+
+            list.innerHTML = items.map((group) => `
+                <div class="section-item">
+                    <div>
+                        <strong>${escapeHtml(group.name)}</strong>
+                        <div class="muted">${escapeHtml(group.description || 'No description')}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function populateGroupSelects(items) {
+            const options = (items || []).map((group) => `<option value="${escapeHtml(group.name)}">${escapeHtml(group.name)}</option>`).join('');
+            document.getElementById('assignmentGroupSelect').innerHTML = `<option value="">No group</option>${options}`;
+            document.getElementById('policyGroupTargetSelect').innerHTML = `<option value="">Select group</option>${options}`;
+        }
+
+        async function loadMachineAssignment() {
+            const machine = getSelectedMachine();
+            if (!machine) {
+                document.getElementById('assignmentGroupSelect').value = '';
+                document.getElementById('assignmentDepartmentInput').value = '';
+                document.getElementById('assignmentUserInput').value = '';
+                document.getElementById('assignmentDeviceInput').value = '';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/machine-assignments?machine=${encodeURIComponent(machine)}`);
+                const payload = await response.json();
+                const assignment = payload.assignment || {};
+                document.getElementById('assignmentGroupSelect').value = assignment.group_name || '';
+                document.getElementById('assignmentDepartmentInput').value = assignment.department || '';
+                document.getElementById('assignmentUserInput').value = assignment.user_name || '';
+                document.getElementById('assignmentDeviceInput').value = assignment.device_label || '';
+            } catch (error) {
+                showAlert('error', 'Failed to load machine assignment');
+            }
+        }
+
+        async function loadPolicies() {
+            try {
+                const response = await fetch('/api/policies');
+                const payload = await response.json();
+                policies = payload.policies || [];
+                renderPolicyList(policies);
+            } catch (error) {
+                showAlert('error', 'Failed to load policies');
+            }
+        }
+
+        function renderPolicyList(items) {
+            const list = document.getElementById('policyList');
+            if (!Array.isArray(items) || items.length === 0) {
+                list.innerHTML = '<div class="policy-item"><div class="muted">No policies created yet</div></div>';
+                return;
+            }
+
+            list.innerHTML = items.map((policy) => `
+                <div class="policy-item">
+                    <div>
+                        <div><strong>${escapeHtml(policy.app_domain)}</strong></div>
+                        <div class="muted">${escapeHtml(policy.description || 'No description')}</div>
+                        <div class="policy-meta">
+                            <span class="pill pill-neutral">${escapeHtml(policy.scope_type)}</span>
+                            <span class="pill pill-neutral">${escapeHtml(policy.scope_target)}</span>
+                            <span class="pill ${policy.action === 'allow' ? 'pill-allow' : policy.action === 'block' ? 'pill-block' : 'pill-isolate'}">${escapeHtml(policy.action)}</span>
+                        </div>
+                    </div>
+                    <button class="btn-danger" style="max-width: 120px;" onclick="deletePolicy(${policy.id})">Delete</button>
+                </div>
+            `).join('');
+        }
+
+        function notifyOnNewRequests(requests) {
+            const nextIds = new Set((requests || []).map((item) => item.id));
+            const newRequests = requestFeedInitialized
+                ? (requests || []).filter((item) => !knownPendingRequestIds.has(item.id))
+                : [];
+
+            knownPendingRequestIds = nextIds;
+            requestFeedInitialized = true;
+
+            if (!newRequests.length) {
+                return;
+            }
+
+            const machine = getSelectedMachine() || 'current machine';
+            const domains = newRequests.slice(0, 2).map((item) => item.domain).join(', ');
+            const suffix = newRequests.length > 2 ? ` and ${newRequests.length - 2} more` : '';
+            showRequestBanner(
+                `${machine} has ${newRequests.length} new unblock request${newRequests.length > 1 ? 's' : ''}: ${domains}${suffix}`
+            );
+            playAlertSound();
+        }
+
+        function renderBlockedList(sites) {
+            const list = document.getElementById('blockedList');
+            if (!Array.isArray(sites) || sites.length === 0) {
+                list.innerHTML = '<div class="rule-item"><div class="muted">No sites currently blocked</div></div>';
+                return;
+            }
+            list.innerHTML = sites.map((site) => `
+                <div class="rule-item">
+                    <div>
+                        <div><strong>${site.domain}</strong></div>
+                        <div class="muted">Methods: ${(site.methods || []).join(', ')}</div>
+                        <div class="muted">Category: ${site.category || 'custom'}</div>
+                        ${site.reason ? `<div class="muted">Reason: ${site.reason}</div>` : ''}
+                        <div class="pill">Risk ${site.risk_score || 0}</div>
+                    </div>
+                    <button class="btn-danger" style="max-width: 120px;" onclick="removeBlock('${site.domain}')">Remove</button>
+                </div>
+            `).join('');
+        }
+
+        function renderRequestList(requests) {
+            const list = document.getElementById('requestList');
+            const badge = document.getElementById('requestBadge');
+            const count = Array.isArray(requests) ? requests.length : 0;
+            badge.textContent = count;
+
+            if (!count) {
+                list.innerHTML = '<div class="rule-item"><div class="muted">No emergency requests waiting</div></div>';
+                return;
+            }
+
+            list.innerHTML = requests.map((item) => `
+                <div class="request-item">
+                    <div>
+                        <div><strong>${escapeHtml(item.domain)}</strong></div>
+                        <div class="muted">Requested by ${escapeHtml(item.requested_by || 'agent')} · ${formatTime(item.timestamp)}</div>
+                        <div class="muted" style="margin-top: 6px;">The machine agent wants this URL unblocked.</div>
+                        ${item.reason ? `<div class="muted" style="margin-top: 6px;">Reason: ${escapeHtml(item.reason)}</div>` : ''}
+                    </div>
+                    <div class="request-actions">
+                        <button class="btn-primary" onclick="resolveUnblockRequest(${item.id}, 'approve')">Approve</button>
+                        <button class="btn-secondary" onclick="resolveUnblockRequest(${item.id}, 'reject')">Reject</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function updateStats() {
+            try {
+                const response = await fetch(buildApiUrl('/api/admin-stats'));
+                const stats = await response.json();
+                document.getElementById('totalBlocked').textContent = stats.total_blocked || 0;
+                document.getElementById('activeRules').textContent = stats.active_rules || 0;
+                document.getElementById('aiModeStat').textContent = stats.ai_enabled ? 'ON' : 'OFF';
+                document.getElementById('requestsToday').textContent = stats.requests_today || 0;
+                document.getElementById('pendingRequests').textContent = stats.pending_unblock_requests || 0;
+            } catch (error) {
+                showAlert('error', 'Failed to load admin stats');
+            }
+        }
+
+        async function addBlockRule() {
+            const domain = document.getElementById('domainInput').value.trim();
+            const category = document.getElementById('categorySelect').value;
+            const reason = document.getElementById('reasonInput').value.trim();
+            const riskScore = parseInt(document.getElementById('riskSlider').value, 10);
+            const useAi = document.getElementById('aiModeToggle').checked;
+            const methods = Array.from(document.querySelectorAll('input[name="method"]:checked')).map((cb) => cb.value);
+
+            if (!domain) {
+                showAlert('error', 'Please enter a domain');
+                return;
+            }
+
+            const response = await fetch('/api/block-site', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: buildJsonRequest({ domain, category, reason, risk_score: riskScore, use_ai: useAi, methods })
+            });
+
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                showAlert('error', error.error || 'Failed to add rule');
+                return;
+            }
+
+            showAlert('success', `Blocked ${domain}`);
+            document.getElementById('domainInput').value = '';
+            document.getElementById('reasonInput').value = '';
+            await loadBlockedSites();
+            await loadUnblockRequests();
+            await updateStats();
+        }
+
+        async function removeBlock(domain) {
+            const response = await fetch('/api/unblock-site', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: buildJsonRequest({ domain })
+            });
+
+            if (!response.ok) {
+                showAlert('error', 'Failed to remove rule');
+                return;
+            }
+
+            showAlert('success', `Unblocked ${domain}`);
+            await loadBlockedSites();
+            await loadUnblockRequests();
+            await updateStats();
+        }
+
+        async function clearAllRules() {
+            if (!confirm('Clear all blocking rules for this machine?')) return;
+
+            const response = await fetch(buildApiUrl('/api/clear-all-blocks'), { method: 'POST' });
+            if (!response.ok) {
+                showAlert('error', 'Failed to clear rules');
+                return;
+            }
+
+            showAlert('success', 'All rules cleared');
+            await loadBlockedSites();
+            await loadUnblockRequests();
+            await updateStats();
+        }
+
+        async function resolveUnblockRequest(requestId, decision) {
+            const response = await fetch(buildApiUrl(`/api/unblock-requests/${requestId}/${decision}`), {
+                method: 'POST'
+            });
+
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                showAlert('error', error.error || 'Failed to update unblock request');
+                return;
+            }
+
+            const payload = await response.json();
+            showAlert('success', `${payload.request.domain} was ${payload.request.status}`);
+            await loadBlockedSites();
+            await loadUnblockRequests();
+            await updateStats();
+        }
+
+        async function createGroup() {
+            const name = document.getElementById('groupNameInput').value.trim();
+            const description = document.getElementById('groupDescriptionInput').value.trim();
+
+            if (!name) {
+                showAlert('error', 'Enter a group name');
+                return;
+            }
+
+            const response = await fetch('/api/groups', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, description })
+            });
+
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                showAlert('error', error.error || 'Failed to create group');
+                return;
+            }
+
+            document.getElementById('groupNameInput').value = '';
+            document.getElementById('groupDescriptionInput').value = '';
+            showAlert('success', `Created group ${name}`);
+            await loadGroups();
+        }
+
+        async function saveMachineAssignment() {
+            const machine = getSelectedMachine();
+            if (!machine) {
+                showAlert('error', 'Select a machine first');
+                return;
+            }
+
+            const response = await fetch('/api/machine-assignments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    machine,
+                    group_name: document.getElementById('assignmentGroupSelect').value,
+                    department: document.getElementById('assignmentDepartmentInput').value.trim(),
+                    user_name: document.getElementById('assignmentUserInput').value.trim(),
+                    device_label: document.getElementById('assignmentDeviceInput').value.trim()
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                showAlert('error', error.error || 'Failed to save machine assignment');
+                return;
+            }
+
+            showAlert('success', `Saved access assignment for ${machine}`);
+            await loadMachineAssignment();
+        }
+
+        async function createPolicy() {
+            const scopeType = document.getElementById('policyScopeType').value;
+            const appDomain = document.getElementById('policyDomainInput').value.trim();
+            const action = document.getElementById('policyActionSelect').value;
+            const description = document.getElementById('policyDescriptionInput').value.trim();
+            const machine = getSelectedMachine();
+            const scopeTarget = scopeType === 'group'
+                ? document.getElementById('policyGroupTargetSelect').value
+                : scopeType === 'machine'
+                    ? machine
+                    : '*';
+
+            if (!appDomain) {
+                showAlert('error', 'Enter an app domain for the policy');
+                return;
+            }
+            if (scopeType === 'machine' && !machine) {
+                showAlert('error', 'Select a machine before creating a machine rule');
+                return;
+            }
+            if (scopeType === 'group' && !scopeTarget) {
+                showAlert('error', 'Select a group for the policy');
+                return;
+            }
+
+            const response = await fetch('/api/policies', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    scope_type: scopeType,
+                    scope_target: scopeTarget,
+                    app_domain: appDomain,
+                    action,
+                    description
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                showAlert('error', error.error || 'Failed to create policy');
+                return;
+            }
+
+            document.getElementById('policyDomainInput').value = '';
+            document.getElementById('policyDescriptionInput').value = '';
+            showAlert('success', `Saved ${action} policy for ${appDomain}`);
+            await loadPolicies();
+        }
+
+        async function deletePolicy(policyId) {
+            const response = await fetch(`/api/policies/${policyId}`, { method: 'DELETE' });
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                showAlert('error', error.error || 'Failed to delete policy');
+                return;
+            }
+
+            showAlert('success', 'Policy deleted');
+            await loadPolicies();
+        }
+
+        async function lookupPolicy() {
+            const machine = getSelectedMachine();
+            const appDomain = document.getElementById('lookupDomainInput').value.trim();
+            const resultBox = document.getElementById('lookupResult');
+
+            if (!machine) {
+                showAlert('error', 'Select a machine first');
+                return;
+            }
+            if (!appDomain) {
+                showAlert('error', 'Enter an app domain to evaluate');
+                return;
+            }
+
+            const response = await fetch(`/api/policy-lookup?machine=${encodeURIComponent(machine)}&app_domain=${encodeURIComponent(appDomain)}`);
+            const payload = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                showAlert('error', payload.error || 'Failed to evaluate policy');
+                return;
+            }
+
+            const matched = payload.matched_policy;
+            resultBox.innerHTML = `
+                <div><strong>Decision: ${escapeHtml(payload.decision)}</strong></div>
+                <div class="muted" style="margin-top: 8px;">Machine group: ${escapeHtml(payload.group_name || 'No group assigned')}</div>
+                <div class="muted" style="margin-top: 8px;">Matched policy: ${matched ? `${escapeHtml(matched.scope_type)} / ${escapeHtml(matched.scope_target)} / ${escapeHtml(matched.app_domain)}` : 'No explicit rule, default allow'}</div>
+            `;
+        }
+
+        function primeAudio() {
+            try {
+                if (!audioContext) {
+                    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                    if (!AudioContextClass) {
+                        return null;
+                    }
+                    audioContext = new AudioContextClass();
+                }
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+                return audioContext;
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function playAlertSound() {
+            if (!soundAlertsEnabled) {
+                return;
+            }
+
+            const context = primeAudio();
+            if (!context) {
+                return;
+            }
+
+            try {
+                const oscillator = context.createOscillator();
+                const gain = context.createGain();
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(880, context.currentTime);
+                gain.gain.setValueAtTime(0.0001, context.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.08, context.currentTime + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.35);
+                oscillator.connect(gain);
+                gain.connect(context.destination);
+                oscillator.start(context.currentTime);
+                oscillator.stop(context.currentTime + 0.35);
+            } catch (error) {
+                // Ignore browsers that block autoplay audio.
+            }
+        }
+
+        async function blockMultipleSites(sites, category, reason) {
+            for (const site of sites) {
+                await fetch('/api/block-site', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: buildJsonRequest({
+                        domain: site,
+                        category,
+                        reason,
+                        methods: ['GET', 'POST'],
+                        risk_score: 75,
+                        use_ai: false
+                    })
+                });
+            }
+            showAlert('success', `Added ${sites.length} rules`);
+            await loadBlockedSites();
+            await updateStats();
+        }
+
+        function blockAllSocialMedia() {
+            blockMultipleSites(['facebook.com', 'twitter.com', 'instagram.com', 'reddit.com', 'youtube.com', 'tiktok.com'], 'social_media', 'Social media platform');
+        }
+
+        function blockAllFileSharing() {
+            blockMultipleSites(['dropbox.com', 'wetransfer.com', 'mega.nz', 'mediafire.com'], 'file_sharing', 'Unauthorized file sharing');
+        }
+
+        function blockAllAI() {
+            blockMultipleSites(['chat.openai.com', 'claude.ai', 'perplexity.ai', 'poe.com'], 'ai_tools', 'AI tools policy');
+        }
+
+        function blockAllStreaming() {
+            blockMultipleSites(['netflix.com', 'hulu.com', 'spotify.com', 'twitch.tv'], 'streaming', 'Streaming policy');
+        }
+
+        function formatTime(timestamp) {
+            const date = new Date(timestamp);
+            if (Number.isNaN(date.getTime())) {
+                return timestamp || '';
+            }
+            return date.toLocaleString();
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            }[char]));
+        }
+    </script>
+</body>
+</html>
