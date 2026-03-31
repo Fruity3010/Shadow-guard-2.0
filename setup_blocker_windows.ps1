@@ -11,11 +11,12 @@ Write-Host "Starting website blocker..." -ForegroundColor Yellow
 # ---- Variables ----
 $PORT = 8888
 $SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
+$BASE_DIR = if ($env:SHADOWGUARD_BASE_DIR) { $env:SHADOWGUARD_BASE_DIR } else { Join-Path $SCRIPT_DIR ".shadowguard" }
 $BLOCKED_HTML = Join-Path $SCRIPT_DIR "templates\blocked.html"
 $VENV_DIR = Join-Path $SCRIPT_DIR ".venv"
-$CERT_DIR = Join-Path $env:USERPROFILE ".mitmproxy"
+$CERT_DIR = Join-Path $BASE_DIR "mitmproxy"
 $CERT_PATH = Join-Path $CERT_DIR "mitmproxy-ca-cert.pem"
-$LOG_DIR = $env:TEMP
+$LOG_DIR = Join-Path $BASE_DIR "logs"
 $DASHBOARD_LOG = Join-Path $LOG_DIR "dashboard.log"
 $DASHBOARD_ERR_LOG = Join-Path $LOG_DIR "dashboard_err.log"
 $PROXY_REG_PATH = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings"
@@ -23,6 +24,15 @@ $PROXY_REG_PATH = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Sett
 $PYTHON = Join-Path $VENV_DIR "Scripts\python.exe"
 $PIP = Join-Path $VENV_DIR "Scripts\pip.exe"
 $MITMDUMP = Join-Path $VENV_DIR "Scripts\mitmdump.exe"
+$DASHBOARD_SCRIPT = Join-Path $SCRIPT_DIR "dashboard.py"
+
+foreach ($dir in @($BASE_DIR, $CERT_DIR, $LOG_DIR)) {
+    if (-not (Test-Path $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+}
+
+$env:SHADOWGUARD_BASE_DIR = $BASE_DIR
 
 # Check templates
 if (-not (Test-Path $BLOCKED_HTML)) {
@@ -100,7 +110,7 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "Starting dashboard server..." -ForegroundColor Yellow
 $script:dashboardProcess = Start-Process `
     -FilePath $PYTHON `
-    -ArgumentList (Join-Path $SCRIPT_DIR "dashboard.py") `
+    -ArgumentList "-u `"$DASHBOARD_SCRIPT`"" `
     -RedirectStandardOutput $DASHBOARD_LOG `
     -RedirectStandardError $DASHBOARD_ERR_LOG `
     -WorkingDirectory $SCRIPT_DIR `
@@ -166,11 +176,12 @@ Write-Host "System proxy set to 127.0.0.1:$PORT" -ForegroundColor Green
 Write-Host ""
 Write-Host "Ready!" -ForegroundColor Green
 Write-Host "Features Active:" -ForegroundColor Cyan
-Write-Host "  - Dynamic blocklist management via admin panel"
+Write-Host "  - Local machine agent API for remote policy control"
 Write-Host "  - Method-specific blocking (GET, POST, etc.)"
 Write-Host "  - Real-time statistics and monitoring"
 Write-Host "Dashboard:   http://localhost:5555"
-Write-Host "Admin Panel: http://localhost:5555/admin"
+Write-Host "Machine API: http://localhost:5555/agent/blocked-sites"
+Write-Host "Remote admin is hosted separately and should call this machine agent."
 Write-Host "WARNING: Firefox requires manual cert import - see about:preferences#privacy" -ForegroundColor Yellow
 Write-Host "Press Ctrl+C to stop"
 Write-Host "----------------------------------------"

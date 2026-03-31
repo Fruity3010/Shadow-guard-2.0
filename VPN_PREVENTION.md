@@ -412,8 +412,8 @@ ps aux | grep monitor_vpn
 
 **Solution 3:** Check logs
 ```bash
-tail -f /tmp/vpn_monitor.log
-tail -f /tmp/vpn_detection.json
+tail -f ./.shadowguard/logs/vpn_monitor.log
+tail -f ./.shadowguard/vpn_detection.json
 ```
 
 ### Performance Issues
@@ -436,9 +436,12 @@ shadowGuard/
 ├── setup_blocker_with_vpn.sh   # Setup script with VPN prevention
 ├── templates/
 │   └── vpn_warning.html         # Warning page for VPN users
-├── vpn_alerts.json              # VPN alert log (auto-generated)
-├── /tmp/vpn_detection.json      # Detection results (auto-generated)
-└── activity.db                  # Contains vpn_detections table
+└── .shadowguard/
+    ├── vpn_alerts.json          # VPN alert log (auto-generated)
+    ├── vpn_detection.json       # Detection results (auto-generated)
+    ├── activity.db              # Contains vpn_detections table
+    └── logs/
+        └── vpn_monitor.log      # Monitor output
 ```
 
 ---
@@ -455,7 +458,7 @@ Always whitelist authorized VPN solutions (Cisco AnyConnect, Zscaler, etc.)
 Provide clear communication about VPN policies and approved alternatives.
 
 ### 4. Review Logs Regularly
-Check `vpn_alerts.json` and dashboard for patterns.
+Check `./.shadowguard/vpn_alerts.json` and dashboard for patterns.
 
 ### 5. Adjust Thresholds
 Fine-tune confidence scores based on your environment and false positive rate.
@@ -482,13 +485,13 @@ curl -X POST http://localhost:5555/api/vpn-add-to-blocklist
 ### View Detection Statistics
 ```bash
 # Total detections
-sqlite3 activity.db "SELECT COUNT(*) FROM vpn_detections WHERE vpn_detected=1;"
+sqlite3 ./.shadowguard/activity.db "SELECT COUNT(*) FROM vpn_detections WHERE vpn_detected=1;"
 
 # Today's detections
-sqlite3 activity.db "SELECT COUNT(*) FROM vpn_detections WHERE vpn_detected=1 AND DATE(timestamp)=DATE('now');"
+sqlite3 ./.shadowguard/activity.db "SELECT COUNT(*) FROM vpn_detections WHERE vpn_detected=1 AND DATE(timestamp)=DATE('now');"
 
 # Top detected interfaces
-sqlite3 activity.db "SELECT interfaces, COUNT(*) as count FROM vpn_detections WHERE vpn_detected=1 GROUP BY interfaces ORDER BY count DESC LIMIT 5;"
+sqlite3 ./.shadowguard/activity.db "SELECT interfaces, COUNT(*) as count FROM vpn_detections WHERE vpn_detected=1 GROUP BY interfaces ORDER BY count DESC LIMIT 5;"
 ```
 
 ---
@@ -496,8 +499,8 @@ sqlite3 activity.db "SELECT interfaces, COUNT(*) as count FROM vpn_detections WH
 ## 📞 Support
 
 For questions or issues:
-1. Check `/tmp/vpn_monitor.log` for errors
-2. Review `/tmp/vpn_detection.json` for detection results
+1. Check `./.shadowguard/logs/vpn_monitor.log` for errors
+2. Review `./.shadowguard/vpn_detection.json` for detection results
 3. Test manually: `python3 vpn_detector.py`
 4. Check API: `curl http://localhost:5555/api/vpn-status`
 

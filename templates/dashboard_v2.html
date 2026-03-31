@@ -550,6 +550,124 @@
             color: white;
         }
 
+        .request-badge {
+            min-width: 28px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(255, 82, 82, 0.12);
+            color: var(--danger);
+            font-size: 12px;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .request-badge.hidden {
+            display: none;
+        }
+
+        .request-copy {
+            margin-top: 6px;
+            font-size: 12px;
+            line-height: 1.5;
+            opacity: 0.72;
+        }
+
+        .request-reason {
+            margin-top: 4px;
+            font-size: 12px;
+            color: #555;
+        }
+
+        .dark-mode .request-reason {
+            color: #c8c8d0;
+        }
+
+        .domain-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: 12px;
+        }
+
+        .btn-small {
+            padding: 8px 12px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #43a047;
+            transform: translateY(-1px);
+            box-shadow: 0 8px 18px rgba(76, 175, 80, 0.25);
+        }
+
+        .empty-list {
+            text-align: center;
+            opacity: 0.6;
+            padding: 26px 18px;
+            line-height: 1.5;
+        }
+
+        .request-form {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .request-input,
+        .request-textarea {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid #d9e2ef;
+            border-radius: 12px;
+            font: inherit;
+            background: white;
+            color: inherit;
+        }
+
+        .dark-mode .request-input,
+        .dark-mode .request-textarea {
+            background: rgba(255, 255, 255, 0.03);
+            border-color: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .request-textarea {
+            min-height: 78px;
+            resize: vertical;
+        }
+
+        .request-tabs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+
+        .request-tab {
+            border: 1px solid rgba(102, 126, 234, 0.2);
+            background: transparent;
+            color: inherit;
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .request-tab.active {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border-color: transparent;
+        }
+
         /* Action Buttons */
         .btn {
             padding: 10px 20px;
@@ -630,6 +748,11 @@
 
         .notification.success {
             background: linear-gradient(135deg, var(--success), #8bc34a);
+            color: white;
+        }
+
+        .notification.warning {
+            background: linear-gradient(135deg, #ffb300, #ff8f00);
             color: white;
         }
 
@@ -805,9 +928,11 @@
                     <input type="text" class="search-input" id="searchInput" placeholder="Search domains...">
                     <span class="search-icon">🔍</span>
                 </div>
-                <a href="/admin" class="btn btn-primary" style="text-decoration: none; margin: 0 10px;">
-                    ⚙️ Admin Panel
+                {% if remote_admin_url %}
+                <a href="{{ remote_admin_url }}" class="btn btn-primary" style="text-decoration: none; margin: 0 10px;" target="_blank" rel="noopener noreferrer">
+                    Remote Admin
                 </a>
+                {% endif %}
                 <div class="theme-toggle" id="themeToggle">
                     <div class="theme-toggle-slider"></div>
                 </div>
@@ -922,8 +1047,33 @@
 
             <!-- Right Sidebar -->
             <div>
-                <!-- Top Blocked Domains -->
                 <div class="panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <span>!</span>
+                            <span>Website Access Requests</span>
+                        </div>
+                        <span class="request-badge hidden" id="requestBadge">0</span>
+                    </div>
+                    <div class="request-form">
+                        <input class="request-input" id="requestDomainInput" type="text" placeholder="Request access to a site, for example youtube.com">
+                        <textarea class="request-textarea" id="requestReasonInput" placeholder="Why do you need this site unblocked?"></textarea>
+                        <button class="btn btn-primary" onclick="submitUnblockRequest()">
+                            <span>Request Unblock</span>
+                        </button>
+                    </div>
+                    <div class="request-tabs">
+                        <button class="request-tab active" data-status="pending" onclick="setRequestTab('pending')">Pending</button>
+                        <button class="request-tab" data-status="approved" onclick="setRequestTab('approved')">Approved</button>
+                        <button class="request-tab" data-status="rejected" onclick="setRequestTab('rejected')">Rejected</button>
+                    </div>
+                    <ul class="domain-list" id="unblockRequestsList">
+                        <li class="empty-list">No requests yet.</li>
+                    </ul>
+                </div>
+
+                <!-- Top Blocked Domains -->
+                <div class="panel" style="margin-top: 30px;">
                     <div class="panel-header">
                         <div class="panel-title">
                             <span>🚫</span>
@@ -1018,6 +1168,14 @@
         let isPaused = false;
         let selectedExportFormat = 'csv';
         let darkMode = false;
+        let currentRequestTab = 'pending';
+        let requestStatusCache = new Map();
+        let requestBoardLoaded = false;
+        let requestCollections = {
+            pending: [],
+            approved: [],
+            rejected: []
+        };
         let trafficData = {
             labels: [],
             allowed: [],
@@ -1144,12 +1302,26 @@
             if (isPaused) return;
             
             try {
-                const response = await fetch('/api/stats');
-                const data = await response.json();
+                const [statsResponse, pendingResponse, approvedResponse, rejectedResponse] = await Promise.all([
+                    fetch('/api/stats'),
+                    fetch('/api/unblock-requests?status=pending&limit=25'),
+                    fetch('/api/unblock-requests?status=approved&limit=25'),
+                    fetch('/api/unblock-requests?status=rejected&limit=25')
+                ]);
+
+                const data = await statsResponse.json();
+                const pendingData = await pendingResponse.json();
+                const approvedData = await approvedResponse.json();
+                const rejectedData = await rejectedResponse.json();
                 updateDashboard(data);
+                updateUnblockRequests({
+                    pending: pendingData.requests || [],
+                    approved: approvedData.requests || [],
+                    rejected: rejectedData.requests || []
+                });
             } catch (error) {
                 console.error('Error fetching stats:', error);
-                showNotification('Connection Error', 'Failed to fetch statistics', 'error');
+                showNotification('Connection Error', 'Failed to fetch dashboard updates', 'error');
             }
         }
 
@@ -1176,6 +1348,72 @@
             // Check for high block rate
             if (data.block_rate > 50) {
                 showNotification('High Block Rate', `${data.block_rate}% of requests are being blocked`, 'error');
+            }
+        }
+
+        function updateUnblockRequests(collections) {
+            const list = document.getElementById('unblockRequestsList');
+            const badge = document.getElementById('requestBadge');
+            requestCollections = collections;
+
+            const pendingRequests = collections.pending || [];
+            const activeRequests = collections[currentRequestTab] || [];
+            const latestStatusMap = new Map();
+            const previousStatusMap = requestStatusCache;
+            const wasLoaded = requestBoardLoaded;
+
+            [...(collections.pending || []), ...(collections.approved || []), ...(collections.rejected || [])].forEach(item => {
+                latestStatusMap.set(item.id, item.status);
+            });
+
+            if (wasLoaded) {
+                latestStatusMap.forEach((status, id) => {
+                    const previousStatus = previousStatusMap.get(id);
+                    if (previousStatus === 'pending' && status !== 'pending') {
+                        const changedRequest = (collections.approved || []).concat(collections.rejected || []).find(item => item.id === id);
+                        if (changedRequest) {
+                            showNotification(
+                                status === 'approved' ? 'Request Approved' : 'Request Rejected',
+                                `${changedRequest.domain} is now ${status}`,
+                                status === 'approved' ? 'success' : 'warning'
+                            );
+                        }
+                    }
+                });
+            }
+
+            const newRequests = wasLoaded
+                ? pendingRequests.filter(item => !previousStatusMap.has(item.id))
+                : [];
+
+            requestStatusCache = latestStatusMap;
+            requestBoardLoaded = true;
+
+            badge.textContent = pendingRequests.length;
+            badge.classList.toggle('hidden', pendingRequests.length === 0);
+
+            if (activeRequests.length === 0) {
+                list.innerHTML = `<li class="empty-list">No ${currentRequestTab} requests right now.</li>`;
+            } else {
+                list.innerHTML = activeRequests.map(item => `
+                    <li class="domain-item blocked">
+                        <div class="domain-info">
+                            <div class="domain-icon">!</div>
+                            <div class="domain-details">
+                                <div class="domain-name">${escapeHtml(item.domain)}</div>
+                                <div class="domain-meta">Requested by ${escapeHtml(item.requested_by || 'agent')} · ${formatRelativeTime(item.timestamp)}</div>
+                                <div class="request-copy">${getRequestStatusCopy(item.status)}</div>
+                                ${item.reason ? `<div class="request-reason">${escapeHtml(item.reason)}</div>` : ''}
+                            </div>
+                        </div>
+                    </li>
+                `).join('');
+            }
+
+            if (newRequests.length > 0) {
+                const domains = newRequests.slice(0, 2).map(item => item.domain).join(', ');
+                const suffix = newRequests.length > 2 ? ` and ${newRequests.length - 2} more` : '';
+                showNotification('Emergency Unblock Request', `${domains}${suffix}`, 'warning');
             }
         }
 
@@ -1311,12 +1549,52 @@
             });
         }
 
+        function formatRelativeTime(timestamp) {
+            const date = new Date(timestamp);
+            const diffMs = Date.now() - date.getTime();
+            const diffMinutes = Math.max(0, Math.round(diffMs / 60000));
+
+            if (diffMinutes < 1) return 'just now';
+            if (diffMinutes === 1) return '1 minute ago';
+            if (diffMinutes < 60) return `${diffMinutes} minutes ago`;
+
+            const diffHours = Math.round(diffMinutes / 60);
+            if (diffHours === 1) return '1 hour ago';
+            if (diffHours < 24) return `${diffHours} hours ago`;
+
+            return date.toLocaleString();
+        }
+
+        function getRequestStatusCopy(status) {
+            if (status === 'approved') return 'IT approved this request and the site can be used again.';
+            if (status === 'rejected') return 'IT reviewed this request and decided to keep the site blocked.';
+            return 'Your request has been sent to the cloud admin and is waiting for review.';
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, char => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            }[char]));
+        }
+
         function filterActivity(searchTerm) {
             const rows = document.querySelectorAll('#activityTableBody tr');
             rows.forEach(row => {
                 const text = row.textContent.toLowerCase();
                 row.style.display = text.includes(searchTerm.toLowerCase()) ? '' : 'none';
             });
+        }
+
+        function setRequestTab(status) {
+            currentRequestTab = status;
+            document.querySelectorAll('.request-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.status === status);
+            });
+            updateUnblockRequests(requestCollections);
         }
 
         // Actions
@@ -1357,6 +1635,68 @@
             if (confirm('This will block ALL network traffic. Continue?')) {
                 showNotification('Emergency Block', 'All traffic is now blocked', 'error');
                 // This would need backend implementation
+            }
+        }
+
+        async function submitUnblockRequest() {
+            const domain = document.getElementById('requestDomainInput').value.trim();
+            const reason = document.getElementById('requestReasonInput').value.trim();
+
+            if (!domain) {
+                showNotification('Missing Domain', 'Enter the site you want to request access to.', 'warning');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/unblock-requests', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        domain,
+                        reason,
+                        requested_by: 'user-dashboard'
+                    })
+                });
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(payload.error || 'Unable to submit request');
+                }
+
+                document.getElementById('requestDomainInput').value = '';
+                document.getElementById('requestReasonInput').value = '';
+                currentRequestTab = 'pending';
+                document.querySelectorAll('.request-tab').forEach(tab => {
+                    tab.classList.toggle('active', tab.dataset.status === 'pending');
+                });
+                await fetchStats();
+                showNotification('Request Sent', `${payload.request.domain} was sent to IT for review.`, 'success');
+            } catch (error) {
+                showNotification('Request Failed', error.message || 'Unable to submit request', 'error');
+            }
+        }
+
+        async function respondToUnblockRequest(requestId, decision) {
+            try {
+                const response = await fetch(`/api/unblock-requests/${requestId}/${decision}`, {
+                    method: 'POST'
+                });
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(payload.error || 'Failed to update request');
+                }
+
+                await fetchStats();
+                showNotification(
+                    decision === 'approve' ? 'Request Approved' : 'Request Rejected',
+                    `${payload.request.domain} was ${payload.request.status}`,
+                    decision === 'approve' ? 'success' : 'warning'
+                );
+            } catch (error) {
+                showNotification('Action Failed', error.message || 'Unable to update request', 'error');
             }
         }
 

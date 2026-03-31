@@ -3,7 +3,7 @@
 ## Installation (30 seconds)
 
 ```bash
-cd /Users/edwardcampbell/Desktop/shadowGuard
+cd /path/to/Shadow-guard-2.0
 sudo ./setup_blocker_with_vpn.sh
 ```
 
@@ -78,16 +78,16 @@ curl -X POST http://localhost:5555/api/vpn-add-to-blocklist
 
 ```bash
 # VPN monitor logs
-tail -f /tmp/vpn_monitor.log
+tail -f ./.shadowguard/logs/vpn_monitor.log
 
 # Dashboard logs
-tail -f /tmp/dashboard.log
+tail -f ./.shadowguard/logs/dashboard.log
 
 # VPN detection results
-cat /tmp/vpn_detection.json | jq
+cat ./.shadowguard/vpn_detection.json | jq
 
 # VPN alerts
-cat vpn_alerts.json | jq
+cat ./.shadowguard/vpn_alerts.json | jq
 ```
 
 ## Stop the System
@@ -171,10 +171,10 @@ vpn_detector.py              # Detection logic
 monitor_vpn.py               # Background monitor
 setup_blocker_with_vpn.sh    # Setup script
 templates/vpn_warning.html   # Warning page
-vpn_alerts.json             # Alerts (auto-generated)
-/tmp/vpn_detection.json     # Detection log
-/tmp/vpn_monitor.log        # Monitor log
-activity.db                  # Database with vpn_detections table
+.shadowguard/vpn_alerts.json      # Alerts (auto-generated)
+.shadowguard/vpn_detection.json   # Detection log
+.shadowguard/logs/vpn_monitor.log # Monitor log
+.shadowguard/activity.db          # Database with vpn_detections table
 ```
 
 ## What Users See
@@ -214,6 +214,6 @@ Detected: utun3, openvpn process
 ---
 
 **Need Help?**
-- Check logs: `/tmp/vpn_monitor.log`
+- Check logs: `./.shadowguard/logs/vpn_monitor.log`
 - Test manually: `python3 vpn_detector.py`
 - View API: `curl http://localhost:5555/api/vpn-status`

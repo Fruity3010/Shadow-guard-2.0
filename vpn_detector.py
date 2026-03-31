@@ -11,6 +11,7 @@ import socket
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Tuple
+from shadowguard_paths import runtime_path
 
 # Known VPN interface patterns
 VPN_INTERFACES = [
@@ -52,8 +53,8 @@ VPN_PORTS = {
 }
 
 class VPNDetector:
-    def __init__(self, log_file="/tmp/vpn_detection.json"):
-        self.log_file = Path(log_file)
+    def __init__(self, log_file=None):
+        self.log_file = Path(log_file) if log_file else runtime_path("vpn_detection.json")
         self.detection_log = []
 
     def check_network_interfaces(self) -> Tuple[bool, List[str]]:
