@@ -5,20 +5,350 @@ Real-time monitoring of all network requests and blocked domains
 """
 
 import json
+import os
+import shutil
 import sqlite3
-import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request, redirect
 from flask_cors import CORS
 import threading
 import time
+from shadowguard_paths import runtime_path
 
 app = Flask(__name__)
 CORS(app)
 
 # Database path
-DB_PATH = Path(__file__).parent / "activity.db"
+DB_PATH = runtime_path("activity.db")
+LEGACY_DB_PATH = Path(__file__).parent / "activity.db"
+PROXY_ACTIVITY_LOG = runtime_path("proxy_activity.json")
+VPN_ALERTS_PATH = runtime_path("vpn_alerts.json")
+LEGACY_BLOCKLIST_FILE = Path(__file__).parent / "blocklist.json"
+DEFAULT_METHODS = ["GET", "POST"]
+REMOTE_ADMIN_URL = os.environ.get("SHADOWGUARD_REMOTE_ADMIN_URL", "").strip()
+
+
+def migrate_legacy_runtime_file(legacy_path, runtime_path_value):
+    """Copy legacy runtime data into the configured base dir once."""
+    if runtime_path_value.exists() or not legacy_path.exists():
+        return
+
+    runtime_path_value.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        shutil.copy2(legacy_path, runtime_path_value)
+    except OSError:
+        pass
+
+def get_db_connection():
+    """Create a SQLite connection with row access."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def get_blocklist_meta():
+    """Return version metadata for the machine blocklist."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT version, updated_at FROM blocklist_meta WHERE id = 1')
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return {'version': 0, 'updated_at': datetime.now().isoformat()}
+
+    return {'version': int(row['version']), 'updated_at': row['updated_at']}
+
+def save_blocklist(blocklist):
+    """Replace the full machine blocklist and bump its version."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now = datetime.now().isoformat()
+
+    cursor.execute('DELETE FROM block_rules')
+    for rule in blocklist:
+        normalized = normalize_block_rule(rule)
+        cursor.execute('''
+            INSERT OR REPLACE INTO block_rules (
+                domain, category, methods, risk_score, reason, use_ai, added_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            normalized['domain'],
+            normalized['category'],
+            json.dumps(normalized['methods']),
+            normalized['risk_score'],
+            normalized['reason'],
+            1 if normalized['use_ai'] else 0,
+            normalized['added_at'],
+            now
+        ))
+
+    cursor.execute('''
+        UPDATE blocklist_meta
+        SET version = version + 1, updated_at = ?
+        WHERE id = 1
+    ''', (now,))
+    conn.commit()
+    conn.close()
+
+    return get_blocklist_meta()
+
+def bump_blocklist_version(cursor):
+    """Increment the blocklist version in the current transaction."""
+    cursor.execute('''
+        UPDATE blocklist_meta
+        SET version = version + 1, updated_at = ?
+        WHERE id = 1
+    ''', (datetime.now().isoformat(),))
+
+def domain_equivalents(domain):
+    """Return equivalent hostname forms for matching unblock requests to rules."""
+    normalized = normalize_domain(domain)
+    if not normalized:
+        return set()
+
+    variants = {normalized}
+    if normalized.startswith('www.'):
+        variants.add(normalized[4:])
+    else:
+        variants.add(f'www.{normalized}')
+    return {value for value in variants if value}
+
+def domains_match_for_unblock(requested_domain, rule_domain):
+    """Return True when a request domain should remove the matching block rule."""
+    requested_variants = domain_equivalents(requested_domain)
+    rule_variants = domain_equivalents(rule_domain)
+
+    for requested in requested_variants:
+        for rule in rule_variants:
+            if requested == rule:
+                return True
+            if requested.endswith(f'.{rule}') or rule.endswith(f'.{requested}'):
+                return True
+    return False
+
+def remove_matching_block_rules(cursor, requested_domain):
+    """Remove all block rules that match the requested hostname or its variants."""
+    cursor.execute('SELECT domain FROM block_rules')
+    existing_domains = [row['domain'] for row in cursor.fetchall()]
+    removable = [domain for domain in existing_domains if domains_match_for_unblock(requested_domain, domain)]
+
+    for domain in removable:
+        cursor.execute('DELETE FROM block_rules WHERE domain = ?', (domain,))
+
+    return removable
+
+def remove_block_rule(domain):
+    """Remove a single block rule and bump the machine policy version."""
+    normalized_domain = normalize_domain(domain)
+    if not normalized_domain:
+        raise ValueError('A domain is required')
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    removed_domains = remove_matching_block_rules(cursor, normalized_domain)
+    changed = bool(removed_domains)
+    if changed:
+        bump_blocklist_version(cursor)
+    conn.commit()
+    conn.close()
+
+    return {
+        'domain': normalized_domain,
+        'changed': changed,
+        'removed_domains': removed_domains,
+        'version': get_blocklist_meta()['version']
+    }
+
+def create_unblock_request(domain, reason="", requested_by="agent"):
+    """Store an unblock request from a local agent or automation."""
+    normalized_domain = normalize_domain(domain)
+    if not normalized_domain:
+        raise ValueError('A domain is required')
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT id FROM unblock_requests
+        WHERE domain = ? AND status = 'pending'
+        ORDER BY timestamp DESC
+        LIMIT 1
+    ''', (normalized_domain,))
+    existing = cursor.fetchone()
+    if existing:
+        conn.close()
+        return {'id': existing['id'], 'domain': normalized_domain, 'status': 'pending', 'duplicate': True}
+
+    cursor.execute('''
+        INSERT INTO unblock_requests (domain, reason, requested_by, status)
+        VALUES (?, ?, ?, 'pending')
+    ''', (normalized_domain, (reason or '').strip(), (requested_by or 'agent').strip() or 'agent'))
+    request_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+
+    return {'id': request_id, 'domain': normalized_domain, 'status': 'pending', 'duplicate': False}
+
+def get_unblock_requests(status='pending', limit=25):
+    """Return unblock requests for dashboard display."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT id, timestamp, domain, reason, requested_by, status, reviewed_at
+        FROM unblock_requests
+        WHERE status = ?
+        ORDER BY timestamp DESC
+        LIMIT ?
+    ''', (status, limit))
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return rows
+
+def resolve_unblock_request(request_id, decision):
+    """Approve or reject an unblock request."""
+    if decision not in {'approved', 'rejected'}:
+        raise ValueError('Decision must be approved or rejected')
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT id, domain, status
+        FROM unblock_requests
+        WHERE id = ?
+    ''', (request_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise ValueError('Unblock request not found')
+
+    if row['status'] != 'pending':
+        cursor.execute('''
+            SELECT id, timestamp, domain, reason, requested_by, status, reviewed_at
+            FROM unblock_requests
+            WHERE id = ?
+        ''', (request_id,))
+        result = dict(cursor.fetchone())
+        conn.close()
+        return result
+
+    reviewed_at = datetime.now().isoformat()
+    removed_domains = []
+
+    if decision == 'approved':
+        removed_domains = remove_matching_block_rules(cursor, row['domain'])
+        if removed_domains:
+            bump_blocklist_version(cursor)
+
+    cursor.execute('''
+        UPDATE unblock_requests
+        SET status = ?, reviewed_at = ?
+        WHERE id = ?
+    ''', (decision, reviewed_at, request_id))
+    conn.commit()
+
+    cursor.execute('''
+        SELECT id, timestamp, domain, reason, requested_by, status, reviewed_at
+        FROM unblock_requests
+        WHERE id = ?
+    ''', (request_id,))
+    result = dict(cursor.fetchone())
+    result['removed_domains'] = removed_domains
+    conn.close()
+    return result
+
+def get_blocklist():
+    """Return the current machine blocklist from SQLite."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT domain, category, methods, risk_score, reason, use_ai, added_at, updated_at
+        FROM block_rules
+        ORDER BY domain
+    ''')
+    rows = cursor.fetchall()
+    conn.close()
+
+    blocklist = []
+    for row in rows:
+        blocklist.append({
+            'domain': row['domain'],
+            'category': row['category'],
+            'methods': json.loads(row['methods']) if row['methods'] else DEFAULT_METHODS.copy(),
+            'risk_score': row['risk_score'],
+            'reason': row['reason'] or '',
+            'use_ai': bool(row['use_ai']),
+            'added_at': row['added_at'],
+            'updated_at': row['updated_at']
+        })
+
+    return blocklist
+
+def normalize_domain(domain):
+    """Normalize user-supplied domains into a matchable hostname fragment."""
+    normalized = (domain or '').strip().lower()
+    normalized = normalized.replace('http://', '').replace('https://', '')
+    normalized = normalized.split('/')[0].strip()
+    return normalized
+
+def normalize_methods(methods):
+    """Normalize blocked HTTP methods."""
+    if not isinstance(methods, list):
+        return DEFAULT_METHODS.copy()
+
+    cleaned = []
+    for method in methods:
+        if isinstance(method, str):
+            upper_method = method.strip().upper()
+            if upper_method and upper_method not in cleaned:
+                cleaned.append(upper_method)
+
+    return cleaned or DEFAULT_METHODS.copy()
+
+def normalize_block_rule(data):
+    """Normalize and validate a block rule payload."""
+    domain = normalize_domain(data.get('domain'))
+    if not domain:
+        raise ValueError('A domain is required')
+
+    try:
+        risk_score = int(data.get('risk_score', 50))
+    except (TypeError, ValueError):
+        risk_score = 50
+
+    risk_score = max(1, min(risk_score, 100))
+
+    return {
+        'domain': domain,
+        'category': (data.get('category') or 'custom').strip() or 'custom',
+        'methods': normalize_methods(data.get('methods', DEFAULT_METHODS)),
+        'risk_score': risk_score,
+        'reason': (data.get('reason') or '').strip(),
+        'use_ai': bool(data.get('use_ai', False)),
+        'added_at': data.get('added_at') or datetime.now().isoformat()
+    }
+
+def migrate_legacy_blocklist():
+    """Import existing JSON rules into SQLite the first time the agent starts."""
+    if not LEGACY_BLOCKLIST_FILE.exists():
+        return
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT COUNT(*) AS count FROM block_rules')
+    existing_count = cursor.fetchone()['count']
+    conn.close()
+
+    if existing_count:
+        return
+
+    try:
+        with open(LEGACY_BLOCKLIST_FILE, 'r', encoding='utf-8') as f:
+            rules = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return
+
+    if isinstance(rules, list) and rules:
+        save_blocklist(rules)
 
 def init_database():
     """Initialize the SQLite database for logging"""
@@ -47,18 +377,58 @@ def init_database():
             user_ip TEXT
         )
     ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS block_rules (
+            domain TEXT PRIMARY KEY,
+            category TEXT DEFAULT 'custom',
+            methods TEXT NOT NULL,
+            risk_score INTEGER DEFAULT 50,
+            reason TEXT DEFAULT '',
+            use_ai INTEGER DEFAULT 0,
+            added_at TEXT,
+            updated_at TEXT
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS blocklist_meta (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            version INTEGER DEFAULT 0,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS unblock_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            domain TEXT NOT NULL,
+            reason TEXT DEFAULT '',
+            requested_by TEXT DEFAULT 'agent',
+            status TEXT DEFAULT 'pending',
+            reviewed_at TEXT
+        )
+    ''')
+
+    cursor.execute('''
+        INSERT OR IGNORE INTO blocklist_meta (id, version, updated_at)
+        VALUES (1, 0, ?)
+    ''', (datetime.now().isoformat(),))
     
     # Create indexes for better performance
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_requests_timestamp ON requests(timestamp)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_requests_domain ON requests(domain)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_blocked_timestamp ON blocked_attempts(timestamp)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_unblock_requests_status ON unblock_requests(status)')
     
     conn.commit()
     conn.close()
+    migrate_legacy_blocklist()
 
 def import_json_logs():
     """Import logs from the JSON file created by the proxy"""
-    json_file = Path(tempfile.gettempdir()) / "proxy_activity.json"
+    json_file = PROXY_ACTIVITY_LOG
     if not json_file.exists():
         return 0
     
@@ -245,6 +615,13 @@ def get_statistics():
         LIMIT 5
     ''')
     stats['today_most_blocked'] = [dict(row) for row in cursor.fetchall()]
+
+    cursor.execute('''
+        SELECT COUNT(*)
+        FROM unblock_requests
+        WHERE status = 'pending'
+    ''')
+    stats['pending_unblock_requests'] = cursor.fetchone()[0]
     
     conn.close()
     return stats
@@ -252,13 +629,18 @@ def get_statistics():
 @app.route('/')
 def dashboard():
     """Serve the main dashboard page"""
-    # Use the enhanced dashboard v2
-    return render_template('dashboard_v2.html')
+    return render_template('dashboard_v2.html', remote_admin_url=REMOTE_ADMIN_URL)
 
 @app.route('/admin')
 def admin():
-    """Serve the admin control panel"""
-    return render_template('admin.html')
+    """Redirect users to the isolated cloud admin when configured."""
+    if REMOTE_ADMIN_URL:
+        return redirect(REMOTE_ADMIN_URL)
+
+    return jsonify({
+        'status': 'unavailable',
+        'message': 'Admin is no longer hosted on the user machine. Set SHADOWGUARD_REMOTE_ADMIN_URL to the cloud admin.'
+    }), 404
 
 @app.route('/api/stats')
 def api_stats():
@@ -291,105 +673,165 @@ def api_clear():
     conn.close()
     return jsonify({'status': 'cleared'})
 
-# Admin API endpoints
-@app.route('/api/blocked-sites')
-def get_blocked_sites():
-    """Get list of currently blocked sites"""
-    blocklist_file = Path(__file__).parent / 'blocklist.json'
-    if blocklist_file.exists():
-        with open(blocklist_file, 'r') as f:
-            return jsonify(json.load(f))
-    return jsonify([])
-
-@app.route('/api/block-site', methods=['POST'])
-def block_site():
-    """Add a site to the blocklist"""
-    from flask import request
-    data = request.json
-    blocklist_file = Path(__file__).parent / 'blocklist.json'
-    
-    # Load existing blocklist
-    if blocklist_file.exists():
-        with open(blocklist_file, 'r') as f:
-            blocklist = json.load(f)
-    else:
-        blocklist = []
-    
-    # Add new site
-    new_block = {
-        'domain': data.get('domain'),
-        'category': data.get('category', 'custom'),
-        'methods': data.get('methods', ['GET', 'POST']),
-        'risk_score': data.get('risk_score', 50),
-        'reason': data.get('reason', ''),
-        'use_ai': data.get('use_ai', False),
-        'added_at': datetime.now().isoformat()
-    }
-    
-    # Remove duplicates
-    blocklist = [b for b in blocklist if b['domain'] != new_block['domain']]
-    blocklist.append(new_block)
-    
-    # Save blocklist
-    with open(blocklist_file, 'w') as f:
-        json.dump(blocklist, f, indent=2)
-    
-    return jsonify({'status': 'blocked', 'domain': new_block['domain']})
-
-@app.route('/api/unblock-site', methods=['POST'])
-def unblock_site():
-    """Remove a site from the blocklist"""
-    from flask import request
-    data = request.json
-    domain = data.get('domain')
-    blocklist_file = Path(__file__).parent / 'blocklist.json'
-    
-    if blocklist_file.exists():
-        with open(blocklist_file, 'r') as f:
-            blocklist = json.load(f)
-        
-        blocklist = [b for b in blocklist if b['domain'] != domain]
-        
-        with open(blocklist_file, 'w') as f:
-            json.dump(blocklist, f, indent=2)
-    
-    return jsonify({'status': 'unblocked', 'domain': domain})
-
-@app.route('/api/clear-all-blocks', methods=['POST'])
-def clear_all_blocks():
-    """Clear all blocking rules"""
-    blocklist_file = Path(__file__).parent / 'blocklist.json'
-    with open(blocklist_file, 'w') as f:
-        json.dump([], f)
-    return jsonify({'status': 'cleared'})
-
-@app.route('/api/admin-stats')
-def admin_stats():
-    """Get admin panel statistics"""
-    blocklist_file = Path(__file__).parent / 'blocklist.json'
-    blocklist = []
-    if blocklist_file.exists():
-        with open(blocklist_file, 'r') as f:
-            blocklist = json.load(f)
-    
+def get_agent_stats_payload():
+    """Build machine-agent stats for the remote admin."""
+    blocklist = get_blocklist()
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    
-    # Get today's request count
     cursor.execute('''
-        SELECT COUNT(*) FROM requests 
+        SELECT COUNT(*) FROM requests
         WHERE DATE(timestamp) = DATE('now')
     ''')
     requests_today = cursor.fetchone()[0]
-    
+    cursor.execute('''
+        SELECT COUNT(*) FROM unblock_requests
+        WHERE status = 'pending'
+    ''')
+    pending_unblock_requests = cursor.fetchone()[0]
     conn.close()
-    
-    return jsonify({
+
+    return {
         'total_blocked': len([b for b in blocklist if b.get('domain')]),
         'active_rules': len(blocklist),
         'ai_enabled': any(b.get('use_ai') for b in blocklist),
-        'requests_today': requests_today
+        'requests_today': requests_today,
+        'blocklist_version': get_blocklist_meta()['version'],
+        'machine_name': os.environ.get('COMPUTERNAME') or os.environ.get('HOSTNAME') or 'unknown-machine',
+        'pending_unblock_requests': pending_unblock_requests
+    }
+
+@app.route('/api/unblock-requests', methods=['GET', 'POST'])
+def api_unblock_requests():
+    """Create or list emergency unblock requests for the local dashboard."""
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        try:
+            result = create_unblock_request(
+                data.get('domain'),
+                reason=data.get('reason', ''),
+                requested_by=data.get('requested_by', 'user')
+            )
+        except ValueError as exc:
+            return jsonify({'status': 'error', 'error': str(exc)}), 400
+
+        return jsonify({
+            'status': 'queued',
+            'request': result
+        }), 201 if not result.get('duplicate') else 200
+
+    status = (request.args.get('status') or 'pending').strip().lower()
+    try:
+        limit = int(request.args.get('limit', 25))
+    except (TypeError, ValueError):
+        limit = 25
+    limit = max(1, min(limit, 100))
+
+    if status not in {'pending', 'approved', 'rejected'}:
+        return jsonify({'status': 'error', 'error': 'Invalid status'}), 400
+
+    return jsonify({
+        'status': 'ok',
+        'requests': get_unblock_requests(status=status, limit=limit)
     })
+
+@app.route('/api/unblock-requests/<int:request_id>/<decision>', methods=['POST'])
+def api_resolve_unblock_request(request_id, decision):
+    """Approve or reject an emergency unblock request from the dashboard."""
+    normalized_decision = (decision or '').strip().lower()
+    if normalized_decision not in {'approve', 'reject'}:
+        return jsonify({'status': 'error', 'error': 'Decision must be approve or reject'}), 400
+
+    try:
+        result = resolve_unblock_request(
+            request_id,
+            'approved' if normalized_decision == 'approve' else 'rejected'
+        )
+    except ValueError as exc:
+        return jsonify({'status': 'error', 'error': str(exc)}), 404
+
+    return jsonify({
+        'status': result['status'],
+        'request': result,
+        'version': get_blocklist_meta()['version']
+    })
+
+# Machine agent endpoints used by the local blocker and remote admin
+@app.route('/agent/blocked-sites')
+def agent_get_blocked_sites():
+    """Return the current blocklist for the local machine."""
+    return jsonify(get_blocklist())
+
+@app.route('/agent/blocklist-version')
+def agent_get_blocklist_version():
+    """Expose a lightweight version marker for the local machine blocklist."""
+    return jsonify(get_blocklist_meta())
+
+@app.route('/agent/block-site', methods=['POST'])
+def agent_block_site():
+    """Add a site to the machine blocklist."""
+    data = request.get_json(silent=True) or {}
+
+    try:
+        new_block = normalize_block_rule(data)
+    except ValueError as exc:
+        return jsonify({'status': 'error', 'error': str(exc)}), 400
+
+    blocklist = [b for b in get_blocklist() if b.get('domain') != new_block['domain']]
+    blocklist.append(new_block)
+    meta = save_blocklist(blocklist)
+
+    return jsonify({
+        'status': 'blocked',
+        'domain': new_block['domain'],
+        'version': meta['version']
+    })
+
+@app.route('/agent/unblock-site', methods=['POST'])
+def agent_unblock_site():
+    """Remove a site from the machine blocklist."""
+    data = request.get_json(silent=True) or {}
+    domain = normalize_domain(data.get('domain'))
+    if not domain:
+        return jsonify({'status': 'error', 'error': 'A domain is required'}), 400
+
+    blocklist = [b for b in get_blocklist() if b.get('domain') != domain]
+    meta = save_blocklist(blocklist)
+
+    return jsonify({
+        'status': 'unblocked',
+        'domain': domain,
+        'version': meta['version']
+    })
+
+@app.route('/agent/request-unblock', methods=['POST'])
+def agent_request_unblock():
+    """Allow the local agent to ask for an emergency unblock review."""
+    data = request.get_json(silent=True) or {}
+
+    try:
+        result = create_unblock_request(
+            data.get('domain'),
+            reason=data.get('reason', ''),
+            requested_by=data.get('requested_by', 'agent')
+        )
+    except ValueError as exc:
+        return jsonify({'status': 'error', 'error': str(exc)}), 400
+
+    return jsonify({
+        'status': 'queued',
+        'request': result
+    }), 201 if not result.get('duplicate') else 200
+
+@app.route('/agent/clear-all-blocks', methods=['POST'])
+def agent_clear_all_blocks():
+    """Clear all blocking rules on the local machine."""
+    meta = save_blocklist([])
+    return jsonify({'status': 'cleared', 'version': meta['version']})
+
+@app.route('/agent/admin-stats')
+def agent_admin_stats():
+    """Get local machine statistics for the remote admin."""
+    return jsonify(get_agent_stats_payload())
 
 # VPN Detection API endpoints
 @app.route('/api/vpn-status')
@@ -432,11 +874,9 @@ def vpn_history():
 @app.route('/api/vpn-alerts')
 def vpn_alerts():
     """Get VPN alerts"""
-    alerts_file = Path(__file__).parent / 'vpn_alerts.json'
-
-    if alerts_file.exists():
+    if VPN_ALERTS_PATH.exists():
         try:
-            with open(alerts_file, 'r') as f:
+            with open(VPN_ALERTS_PATH, 'r') as f:
                 alerts = json.load(f)
             return jsonify(alerts)
         except Exception as e:
@@ -454,12 +894,7 @@ def vpn_add_to_blocklist():
         vpn_blocklist = detector.get_vpn_provider_blocklist()
 
         # Load existing blocklist
-        blocklist_file = Path(__file__).parent / 'blocklist.json'
-        if blocklist_file.exists():
-            with open(blocklist_file, 'r') as f:
-                blocklist = json.load(f)
-        else:
-            blocklist = []
+        blocklist = get_blocklist()
 
         # Get existing domains
         existing_domains = {b['domain'] for b in blocklist}
@@ -471,14 +906,13 @@ def vpn_add_to_blocklist():
                 blocklist.append(vpn_entry)
                 added_count += 1
 
-        # Save updated blocklist
-        with open(blocklist_file, 'w') as f:
-            json.dump(blocklist, f, indent=2)
+        meta = save_blocklist(blocklist)
 
         return jsonify({
             'status': 'success',
             'added': added_count,
-            'total_vpn_domains': len(vpn_blocklist)
+            'total_vpn_domains': len(vpn_blocklist),
+            'version': meta['version']
         })
 
     except Exception as e:
@@ -493,14 +927,16 @@ def vpn_stats():
 
         # Total VPN detections
         cursor.execute('SELECT COUNT(*) FROM vpn_detections WHERE vpn_detected = 1')
-        total_detections = cursor.fetchone()[0] if cursor.fetchone() else 0
+        total_row = cursor.fetchone()
+        total_detections = total_row[0] if total_row else 0
 
         # Today's detections
         cursor.execute('''
             SELECT COUNT(*) FROM vpn_detections
             WHERE vpn_detected = 1 AND DATE(timestamp) = DATE('now')
         ''')
-        today_detections = cursor.fetchone()[0] if cursor.fetchone() else 0
+        today_row = cursor.fetchone()
+        today_detections = today_row[0] if today_row else 0
 
         # Last detection time
         cursor.execute('''
@@ -564,14 +1000,15 @@ def cleanup_old_data():
         # Run cleanup once per day
         time.sleep(86400)
 
+migrate_legacy_runtime_file(LEGACY_DB_PATH, DB_PATH)
+init_database()
+get_blocklist_meta()
+
 if __name__ == '__main__':
-    # Initialize database
-    init_database()
-    
     # Start cleanup thread
     cleanup_thread = threading.Thread(target=cleanup_old_data, daemon=True)
     cleanup_thread.start()
     
     # Run the dashboard
-    print("🚀 Starting dashboard on http://localhost:5555")
-    app.run(host='0.0.0.0', port=5555, debug=True)
+    print("Starting dashboard on http://localhost:5555")
+    app.run(host='0.0.0.0', port=5555, debug=False)
