@@ -1,6 +1,6 @@
 # Cloudflare Tunnel Setup
 
-This guide uses one supported setup path: run the included Windows script and let it create the machine tunnel, DNS route, config file, and Windows service for you.
+This guide uses the included setup scripts and lets them create the machine tunnel, DNS route, config file, and local service for you.
 
 ## What this gives you
 
@@ -25,7 +25,7 @@ These are the only one-time items that must already be true:
 
 If the domain is not yet on Cloudflare, an admin must first update the registrar nameservers to the Cloudflare nameservers for that domain. That is the only infrastructure-side manual step.
 
-## One setup command for the user
+## Windows setup
 
 Run this from the project root in an elevated PowerShell window:
 
@@ -38,19 +38,32 @@ Run this from the project root in an elevated PowerShell window:
   -InstallService
 ```
 
-That is the only supported machine setup flow.
+## macOS setup
+
+Run this from the project root in Terminal:
+
+```bash
+bash ./setup_cloudflared_macos.sh \
+  --machine-name "laptop-hr01" \
+  --hostname-suffix "guard.example.com" \
+  --create-tunnel \
+  --route-dns \
+  --install-service
+```
+
+By default the macOS script installs Cloudflare Tunnel as a launch agent for the current user, which matches Cloudflare's recommended `cloudflared service install` flow on macOS.
 
 ## What the script does automatically
 
-The script will:
+The setup script will:
 
 - install `cloudflared` if it is missing
 - open the Cloudflare login flow when tunnel creation requires authentication
 - create the named tunnel
 - create the DNS route for `laptop-hr01.guard.example.com`
-- write the tunnel config under `.\.shadowguard\cloudflared\config.yml`
+- write the tunnel runtime config under `.\.shadowguard\cloudflared\config.yml` on Windows or `./.shadowguard/cloudflared/config.yml` on macOS
 - reuse or copy the tunnel credential JSON into that same runtime directory
-- install `cloudflared` as a Windows service
+- install `cloudflared` as a background service
 - start the service if possible
 
 By default all generated Cloudflare runtime files are stored under:
@@ -59,11 +72,18 @@ By default all generated Cloudflare runtime files are stored under:
 .\.shadowguard\cloudflared
 ```
 
-If you want a different location, set `SHADOWGUARD_BASE_DIR` or pass `-BaseDir`.
+If you want a different location, set `SHADOWGUARD_BASE_DIR` or pass `-BaseDir` on Windows or `--base-dir` on macOS.
 
 ## What the user will see
 
 During setup, the script may open a browser window for the Cloudflare login and tunnel authorization step. That Cloudflare sign-in is expected, but the user does not need to manually create the tunnel, write YAML, or run separate `cloudflared` commands.
+
+On macOS, Cloudflare's service install expects service config in:
+
+- `~/.cloudflared` for a launch agent started at user login
+- `/etc/cloudflared` for a launch daemon started at system boot
+
+The macOS helper handles that sync automatically when you use `--install-service`.
 
 ## Example result
 
@@ -77,7 +97,7 @@ The generated config will look like this:
 
 ```yaml
 tunnel: <TUNNEL_ID>
-credentials-file: <BASE_DIR>\cloudflared\<TUNNEL_ID>.json
+credentials-file: <BASE_DIR>/cloudflared/<TUNNEL_ID>.json
 
 ingress:
   - hostname: laptop-hr01.guard.example.com
@@ -89,19 +109,40 @@ ingress:
 
 After setup, check these items:
 
-1. The service exists:
+1. The service exists.
+
+Windows:
 ```powershell
 Get-Service cloudflared
 ```
 
-2. The runtime files exist:
+macOS:
+```bash
+launchctl list | grep cloudflared
+```
+
+2. The runtime files exist.
+
+Windows:
 ```powershell
 Get-ChildItem .\.shadowguard\cloudflared
 ```
 
-3. The machine endpoint responds:
+macOS:
+```bash
+ls -la ./.shadowguard/cloudflared
+```
+
+3. The machine endpoint responds.
+
+Windows:
 ```powershell
 Invoke-WebRequest "https://laptop-hr01.guard.example.com/agent/blocked-sites"
+```
+
+macOS:
+```bash
+curl https://laptop-hr01.guard.example.com/agent/blocked-sites
 ```
 
 If the agent is healthy, you should get a response from the local ShadowGuard machine API through Cloudflare.
@@ -142,7 +183,8 @@ https://{machine}.guard.example.com
 - Use one machine name per endpoint and keep it stable.
 - Re-run the same script command if you need to rebuild the config or service.
 - If credentials were originally created under the legacy `%USERPROFILE%\.cloudflared` path, the script will copy them into the project runtime directory automatically.
-- This guide intentionally does not document the manual `cloudflared tunnel create`, `route dns`, or handwritten YAML flow. The script is the standard path.
+- On macOS, the helper supports `--service-scope boot` if you want a launch daemon instead of a per-user launch agent.
+- This guide intentionally does not document the manual `cloudflared tunnel create`, `route dns`, or handwritten YAML flow. The setup scripts are the standard path.
 
 ## Outcome
 

@@ -1,5 +1,5 @@
 tunnel: YOUR_TUNNEL_ID
-credentials-file: <BASE_DIR>\cloudflared\YOUR_TUNNEL_ID.json
+credentials-file: <BASE_DIR>/cloudflared/YOUR_TUNNEL_ID.json
 
 ingress:
   - hostname: MACHINE_NAME.guard.example.com
