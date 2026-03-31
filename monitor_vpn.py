@@ -7,16 +7,16 @@ Continuously monitors for VPN usage and logs to dashboard
 import time
 import sys
 import signal
-from pathlib import Path
 from datetime import datetime
 from vpn_detector import VPNDetector
 import sqlite3
 import json
+from shadowguard_paths import runtime_path
 
 # Configuration
 CHECK_INTERVAL = 60  # Check every 60 seconds
-DB_PATH = Path(__file__).parent / "activity.db"
-VPN_LOG_PATH = Path(__file__).parent / "vpn_alerts.json"
+DB_PATH = runtime_path("activity.db")
+VPN_LOG_PATH = runtime_path("vpn_alerts.json")
 
 class VPNMonitor:
     def __init__(self):

@@ -11,17 +11,6 @@
     "added_at": "2025-09-11T18:00:00"
   },
   {
-    "domain": "reddit.com",
-    "category": "social_media",
-    "methods": [
-      "GET",
-      "POST"
-    ],
-    "risk_score": 60,
-    "reason": "Social media - productivity risk",
-    "added_at": "2025-09-11T18:00:00"
-  },
-  {
     "domain": "tiktok.com",
     "category": "social_media",
     "methods": [

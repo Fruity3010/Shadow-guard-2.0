@@ -14,8 +14,14 @@ PORT=8888
 
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+BASE_DIR="${SHADOWGUARD_BASE_DIR:-$SCRIPT_DIR/.shadowguard}"
+LOG_DIR="$BASE_DIR/logs"
+MITMPROXY_DIR="$BASE_DIR/mitmproxy"
 BLOCKED_HTML="$SCRIPT_DIR/templates/blocked.html"
 VPN_WARNING_HTML="$SCRIPT_DIR/templates/vpn_warning.html"
+
+mkdir -p "$LOG_DIR" "$MITMPROXY_DIR"
+export SHADOWGUARD_BASE_DIR="$BASE_DIR"
 
 # Check if blocked.html exists
 if [ ! -f "$BLOCKED_HTML" ]; then
@@ -38,53 +44,17 @@ fi
 if [ -d "$SCRIPT_DIR/.venv" ]; then
     echo "✅ Using virtual environment"
     source "$SCRIPT_DIR/.venv/bin/activate"
-else:
+else
     echo "📦 Creating virtual environment..."
     python3 -m venv "$SCRIPT_DIR/.venv"
     source "$SCRIPT_DIR/.venv/bin/activate"
     pip install -r "$SCRIPT_DIR/requirements.txt"
 fi
 
-# Add VPN providers to blocklist
-echo "🚫 Adding VPN providers to blocklist..."
-python3 << EOF
-from vpn_detector import VPNDetector
-import json
-from pathlib import Path
-
-detector = VPNDetector()
-vpn_blocklist = detector.get_vpn_provider_blocklist()
-
-# Load existing blocklist
-blocklist_file = Path('$SCRIPT_DIR/blocklist.json')
-if blocklist_file.exists():
-    with open(blocklist_file, 'r') as f:
-        blocklist = json.load(f)
-else:
-    blocklist = []
-
-# Get existing domains
-existing_domains = {b['domain'] for b in blocklist}
-
-# Add VPN domains
-added = 0
-for vpn_entry in vpn_blocklist:
-    if vpn_entry['domain'] not in existing_domains:
-        blocklist.append(vpn_entry)
-        added += 1
-
-# Save
-with open(blocklist_file, 'w') as f:
-    json.dump(blocklist, f, indent=2)
-
-print(f"✅ Added {added} VPN provider domains to blocklist")
-print(f"📋 Total blocking rules: {len(blocklist)}")
-EOF
-
 # Start the dashboard in background
 echo "📊 Starting dashboard server..."
 cd "$SCRIPT_DIR"
-python dashboard.py > /tmp/dashboard.log 2>&1 &
+python dashboard.py > "$LOG_DIR/dashboard.log" 2>&1 &
 DASHBOARD_PID=$!
 sleep 2
 
@@ -94,12 +64,31 @@ if kill -0 $DASHBOARD_PID 2>/dev/null; then
     echo "📱 Open http://localhost:5555 in your browser to view statistics"
 else
     echo "⚠️  Dashboard failed to start, but proxy will continue"
-    echo "Check /tmp/dashboard.log for errors"
+    echo "Check $LOG_DIR/dashboard.log for errors"
 fi
+
+# Add VPN providers through the local agent instead of mutating tracked repo files
+echo "🚫 Adding VPN providers to blocklist..."
+python3 << EOF
+import json
+import urllib.request
+
+request = urllib.request.Request(
+    "http://127.0.0.1:5555/api/vpn-add-to-blocklist",
+    data=b"",
+    method="POST"
+)
+
+with urllib.request.urlopen(request, timeout=10) as response:
+    payload = json.loads(response.read().decode("utf-8"))
+
+print(f"✅ Added {payload.get('added', 0)} VPN provider domains to blocklist")
+print(f"📋 Total VPN provider rules available: {payload.get('total_vpn_domains', 0)}")
+EOF
 
 # Start VPN monitoring in background
 echo "🔍 Starting VPN monitor..."
-python monitor_vpn.py > /tmp/vpn_monitor.log 2>&1 &
+python monitor_vpn.py > "$LOG_DIR/vpn_monitor.log" 2>&1 &
 VPN_MONITOR_PID=$!
 sleep 1
 
@@ -107,18 +96,18 @@ if kill -0 $VPN_MONITOR_PID 2>/dev/null; then
     echo "✅ VPN monitor active (checking every 60s)"
 else
     echo "⚠️  VPN monitor failed to start"
-    echo "Check /tmp/vpn_monitor.log for errors"
+    echo "Check $LOG_DIR/vpn_monitor.log for errors"
 fi
 
 # Start mitmproxy in background to generate certificates
 echo "🔐 Setting up certificates..."
-mitmdump --listen-port $PORT --set confdir=~/.mitmproxy &
+mitmdump --listen-port $PORT --set confdir="$MITMPROXY_DIR" &
 MITM_PID=$!
 sleep 3
 kill $MITM_PID 2>/dev/null
 
 # Install the certificate automatically
-CERT_PATH=~/.mitmproxy/mitmproxy-ca-cert.pem
+CERT_PATH="$MITMPROXY_DIR/mitmproxy-ca-cert.pem"
 if [ -f "$CERT_PATH" ]; then
     echo "📜 Installing mitmproxy certificate (requires password)..."
 
@@ -169,7 +158,7 @@ echo ""
 echo "✅ Ready!"
 echo "⚡ Features Active:"
 echo "  • Dynamic blocklist management"
-echo "  • VPN provider blocking (${#VPN_PROVIDERS[@]} domains)"
+echo "  • VPN provider blocking via the local agent API"
 echo "  • Real-time VPN detection"
 echo "  • Network monitoring & statistics"
 echo ""
@@ -181,4 +170,4 @@ echo "⚠️  Press Ctrl+C to stop"
 echo "=========================================="
 
 # Run the proxy
-mitmdump -s "$SCRIPT_DIR/simple_blocker.py" --listen-port $PORT --set confdir=~/.mitmproxy
+mitmdump -s "$SCRIPT_DIR/simple_blocker.py" --listen-port $PORT --set confdir="$MITMPROXY_DIR"

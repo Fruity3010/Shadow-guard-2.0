@@ -13,7 +13,13 @@ PORT=8888
 
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+BASE_DIR="${SHADOWGUARD_BASE_DIR:-$SCRIPT_DIR/.shadowguard}"
+LOG_DIR="$BASE_DIR/logs"
+MITMPROXY_DIR="$BASE_DIR/mitmproxy"
 BLOCKED_HTML="$SCRIPT_DIR/templates/blocked.html"
+
+mkdir -p "$LOG_DIR" "$MITMPROXY_DIR"
+export SHADOWGUARD_BASE_DIR="$BASE_DIR"
 
 # Check if blocked.html exists
 if [ ! -f "$BLOCKED_HTML" ]; then
@@ -22,7 +28,7 @@ if [ ! -f "$BLOCKED_HTML" ]; then
 fi
 
 # Create the Python proxy script with dashboard integration
-cat > /tmp/blocker.py << EOF
+cat > "$BASE_DIR/blocker.py" << EOF
 from mitmproxy import http
 from pathlib import Path
 import time
@@ -131,7 +137,7 @@ fi
 # Start the dashboard in background
 echo "📊 Starting dashboard server..."
 cd "$SCRIPT_DIR"
-python dashboard.py > /tmp/dashboard.log 2>&1 &
+python dashboard.py > "$LOG_DIR/dashboard.log" 2>&1 &
 DASHBOARD_PID=$!
 sleep 2
 
@@ -141,18 +147,18 @@ if kill -0 $DASHBOARD_PID 2>/dev/null; then
     echo "📱 Open http://localhost:5555 in your browser to view statistics"
 else
     echo "⚠️  Dashboard failed to start, but proxy will continue"
-    echo "Check /tmp/dashboard.log for errors"
+    echo "Check $LOG_DIR/dashboard.log for errors"
 fi
 
 # Start mitmproxy in background to generate certificates
 echo "🔐 Setting up certificates..."
-mitmdump --listen-port $PORT --set confdir=~/.mitmproxy &
+mitmdump --listen-port $PORT --set confdir="$MITMPROXY_DIR" &
 MITM_PID=$!
 sleep 3
 kill $MITM_PID 2>/dev/null
 
 # Install the certificate automatically
-CERT_PATH=~/.mitmproxy/mitmproxy-ca-cert.pem
+CERT_PATH="$MITMPROXY_DIR/mitmproxy-ca-cert.pem"
 if [ -f "$CERT_PATH" ]; then
     echo "📜 Installing mitmproxy certificate (requires password)..."
 
@@ -195,13 +201,14 @@ trap cleanup EXIT INT TERM
 # Display features
 echo "✅ Ready!"
 echo "⚡ Features Active:"
-echo "  • Dynamic blocklist management via admin panel"
+echo "  • Local machine agent API for remote policy control"
 echo "  • Method-specific blocking (GET, POST, etc.)"
 echo "  • Real-time statistics and monitoring"
 echo "📊 Dashboard: http://localhost:5555"
-echo "📋 Admin Panel: http://localhost:5555/admin"
+echo "🤖 Machine API: http://localhost:5555/agent/blocked-sites"
+echo "☁️  Remote admin is hosted separately and should call this machine agent."
 echo "⚠️  Press Ctrl+C to stop"
 echo "----------------------------------------"
 
 # Run the proxy
-mitmdump -s "$SCRIPT_DIR/simple_blocker.py" --listen-port $PORT --set confdir=~/.mitmproxy
+mitmdump -s "$SCRIPT_DIR/simple_blocker.py" --listen-port $PORT --set confdir="$MITMPROXY_DIR"
