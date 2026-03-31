@@ -14,11 +14,36 @@ Then set the machine defaults you want:
 - `SHADOWGUARD_DEFAULT_MACHINE=peterpc`
 - `SHADOWGUARD_ALLOWED_MACHINES=peterpc`
 
-For persistent cloud policy storage, set:
+## Admin authentication
 
-- `DATABASE_URL=postgresql://...`
+The Vercel admin now uses Supabase Auth for sign-in. To enable it, add:
 
-If `DATABASE_URL` is not set, the app falls back to `policy_store.db`, which is fine for local testing but not durable on Vercel.
+- `SUPABASE_URL=https://xxxx.supabase.co`
+- `SUPABASE_ANON_KEY=your-supabase-anon-key`
+- `SHADOWGUARD_ADMIN_SESSION_SECRET=generate-a-long-random-secret`
+
+The app also accepts these fallback names if you already use Supabase's newer naming in Vercel:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `SUPABASE_PUBLISHABLE_KEY`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+Optional access restrictions:
+
+- `SHADOWGUARD_SUPABASE_ALLOWED_EMAILS=alice@company.com,bob@company.com`
+- `SHADOWGUARD_SUPABASE_ALLOWED_DOMAIN=company.com`
+
+Notes:
+
+- If `SUPABASE_URL` and `SUPABASE_ANON_KEY` are set, the app requires a Supabase login for both the UI and API routes.
+- On Vercel, the admin now fails closed. If Supabase auth vars are missing, the app returns a configuration error instead of exposing the admin publicly.
+- A deployed Vercel app only sees variables configured in the Vercel project settings. A local `.env` file does not secure the deployed site by itself.
+- If you set `SHADOWGUARD_SUPABASE_ALLOWED_EMAILS`, only those exact users can sign in.
+- If you set `SHADOWGUARD_SUPABASE_ALLOWED_DOMAIN`, only users from that email domain can sign in.
+- You can use both restrictions together if you want a domain rule plus an explicit allowlist.
+- You should set `SHADOWGUARD_ADMIN_SESSION_SECRET` in Vercel so session cookies stay stable across deployments.
 
 ## Local run
 
@@ -40,19 +65,4 @@ python app.py
 
 - Vercel detects `app.py` automatically because it exports a top-level Flask `app`.
 - `vercel.json` excludes local-only files like `venv/`, `__pycache__/`, and `.env` from the Python bundle.
-- Policy storage supports Postgres through `DATABASE_URL`. This is the recommended production path for groups, machine assignments, and access policies.
-
-## Machine policy enforcement
-
-On the user machine, point the blocker at the cloud admin lookup endpoint:
-
-- `SHADOWGUARD_POLICY_LOOKUP_URL=https://your-vercel-admin-host`
-- `SHADOWGUARD_MACHINE_NAME=peterpc`
-
-If `SHADOWGUARD_POLICY_LOOKUP_URL` is not set, the blocker falls back to `SHADOWGUARD_REMOTE_ADMIN_URL` when available.
-
-The blocker now evaluates cloud policies with these actions:
-
-- `allow`: explicitly allow the app even if a local block rule exists
-- `block`: block the app with the normal block page
-- `isolate`: block the app with an isolation page so the user can see it was isolated by policy
+- On Vercel, session cookies are marked secure automatically.

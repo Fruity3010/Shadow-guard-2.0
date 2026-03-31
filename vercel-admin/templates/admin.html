@@ -26,6 +26,38 @@
         }
         h1, h2, h3 { margin-top: 0; }
         .muted { color: #64748b; }
+        .hero {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+        .auth-panel {
+            min-width: 220px;
+            padding: 14px 16px;
+            border-radius: 14px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+        }
+        .auth-label {
+            font-size: 12px;
+            font-weight: 700;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .auth-user {
+            margin-top: 6px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+        .auth-form {
+            margin-top: 12px;
+        }
+        .auth-form button {
+            max-width: 140px;
+        }
         .grid {
             display: grid;
             grid-template-columns: 1.1fr 1fr;
@@ -321,8 +353,21 @@
 <body>
     <div class="wrap">
         <div class="card">
-            <h1>ShadowGuard Cloud Admin</h1>
-            <p class="muted">Control local machine agents through your stable Cloudflare hostnames.</p>
+            <div class="hero">
+                <div>
+                    <h1>ShadowGuard Cloud Admin</h1>
+                    <p class="muted">Control local machine agents through your stable Cloudflare hostnames.</p>
+                </div>
+                {% if auth_enabled %}
+                <div class="auth-panel">
+                    <div class="auth-label">Signed In</div>
+                    <div class="auth-user">{{ admin_email }}</div>
+                    <form class="auth-form" method="post" action="/logout">
+                        <button type="submit" class="btn-secondary">Sign Out</button>
+                    </form>
+                </div>
+                {% endif %}
+            </div>
             <div class="row machines">
                 <label for="machineInput">Target machine</label>
                 {% if allowed_machines %}

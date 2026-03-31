@@ -42,3 +42,4 @@ __pycache__/
 /tmp/
 *.tmp
 *.bak
+.shadowguard/
